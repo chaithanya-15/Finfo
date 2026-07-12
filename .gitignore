@@ -1,0 +1,21 @@
+# virtualenv
+.venv/
+
+# large source corpus, regenerate with: python -m src.data_processing.download_pdfs
+data/raw_pdfs/
+data/processed_chunks/
+
+# experiment outputs
+results/*
+!results/.gitkeep
+!results/figures/
+!results/figures/.gitkeep
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+
+# os
+.DS_Store
