@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 
 # Add src to path
-sys.path.append(str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
