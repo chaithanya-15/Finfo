@@ -15,14 +15,13 @@ project/
 │   ├── data_processing/      # PDF download, text extraction, cleaning, chunking
 │   ├── retrieval/            # embedding, indexing, search
 │   ├── generation/           # LLM loading, prompting, answer generation
-│   ├── evaluation/           # metrics calculation, evaluation pipeline
-│   └── utils/                # utility functions, config handling
+│   └── evaluation/           # metrics calculation, evaluation pipeline
 ├── configs/                  # YAML config files for experiments
 ├── results/                  # experiment results
 │   ├── metrics.csv
 │   └── figures/
 └── report/
-    └── report.pdf            # final report
+    └── template.md           # skeleton for the final report
 ```
 
 ## Setup
