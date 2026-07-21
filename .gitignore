@@ -4,6 +4,7 @@
 # large source corpus, regenerate with: python -m src.data_processing.download_pdfs
 data/raw_pdfs/
 data/processed_chunks/
+data/extracted_text/
 
 # experiment outputs
 results/*

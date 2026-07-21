@@ -11,8 +11,8 @@ from typing import List, Dict, Any, Tuple, Optional
 import pandas as pd
 import pypdf
 import pdfplumber
-from unstructured.partition.pdf import partition_pdf
-from unstructured.documents.elements import Table, Title, NarrativeText
+# unstructured is imported inside extract_text_unstructured. It pulls in layout-detection
+# models that take minutes to load and are only needed for that one extraction method.
 import tiktoken
 from pathlib import Path
 import logging
@@ -116,6 +116,9 @@ def extract_text_unstructured(pdf_path: str) -> tuple[str, list]:
         Tuple of (text, elements)
     """
     try:
+        from unstructured.partition.pdf import partition_pdf
+        from unstructured.documents.elements import Table, Title, NarrativeText
+
         elements = partition_pdf(
             pdf_path,
             strategy="hi_res",  # High-resolution strategy for better structure detection
@@ -141,13 +144,19 @@ def extract_text_unstructured(pdf_path: str) -> tuple[str, list]:
         return "", []
 
 
-def extract_document_text(pdf_path: str, method: str = "unstructured") -> tuple[str, list]:
+def extract_document_text(pdf_path: str, method: str = "unstructured",
+                          cache_dir: str = "data/extracted_text") -> tuple[str, list]:
     """
     Extract text from PDF using specified method.
+
+    Results are cached per document and method. Every chunking strategy re-reads the same
+    PDF, and extraction dominates the runtime, so without the cache a three-strategy run
+    over the corpus pays for extraction three times.
 
     Args:
         pdf_path: Path to PDF file
         method: Extraction method ('pypdf', 'pdfplumber', or 'unstructured')
+        cache_dir: Directory holding cached extractions, set to None to disable
 
     Returns:
         Tuple of (text, tables_or_elements)
@@ -156,6 +165,39 @@ def extract_document_text(pdf_path: str, method: str = "unstructured") -> tuple[
         logger.error(f"PDF file not found: {pdf_path}")
         return "", []
 
+    cache_path = None
+    if cache_dir:
+        doc_name = Path(pdf_path).stem
+        cache_path = Path(cache_dir) / method / f"{doc_name}.json"
+        if cache_path.exists():
+            try:
+                with open(cache_path, 'r') as f:
+                    cached = json.load(f)
+                return cached["text"], cached["extra"]
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning(f"Ignoring unreadable cache {cache_path}: {e}")
+
+    text, extra = _extract_uncached(pdf_path, method)
+
+    if cache_path is not None and text.strip():
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(cache_path, 'w') as f:
+            json.dump({"text": text, "extra": extra}, f)
+
+    return text, extra
+
+
+def _extract_uncached(pdf_path: str, method: str) -> tuple[str, list]:
+    """
+    Run the requested extractor without consulting the cache.
+
+    Args:
+        pdf_path: Path to PDF file
+        method: Extraction method ('pypdf', 'pdfplumber', or 'unstructured')
+
+    Returns:
+        Tuple of (text, tables_or_elements)
+    """
     if method == "pypdf":
         text = extract_text_pypdf(pdf_path)
         return text, []
