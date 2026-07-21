@@ -6,6 +6,10 @@ data/raw_pdfs/
 data/processed_chunks/
 data/extracted_text/
 
+# vector indexes, rebuilt from chunks
+indexes/
+*_chroma_db/
+
 # experiment outputs
 results/*
 !results/.gitkeep
