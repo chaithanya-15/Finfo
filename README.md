@@ -82,6 +82,16 @@ The evaluation pipeline computes:
 - Citation validation metrics
 - Error analysis by question type
 
+## Current status
+
+The pipeline does not run end to end yet. `src/generation/` is empty, so nothing loads the
+model named under `generation:` in `configs/base_config.yaml` and `run_pipeline.py` cannot
+produce answers. `data/processed_chunks/` and `results/` are empty for the same reason: no
+full run has happened.
+
+Raw PDFs and the virtualenv are not tracked here. Rebuild the corpus with
+`python -m src.data_processing.download_pdfs`.
+
 ## Implementation Notes
 
 This implementation follows all constraints from the project brief:
