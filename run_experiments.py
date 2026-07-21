@@ -34,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.data_processing.ingest import process_document
 from src.retrieval.retrieve import build_index, load_index, search_index, load_chunks_from_directory
-from src.evaluation.evaluate import create_evaluation_pipeline
+from src.evaluation.evaluate import create_evaluation_pipeline, json_safe
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -282,7 +282,7 @@ def run_one(exp: Dict[str, Any], base: Dict[str, Any], qa: Dict[str, Any],
 
         pd.DataFrame(results).to_csv(run_dir / f"detailed_{scope}.csv", index=False)
         with open(run_dir / f"aggregated_{scope}.json", "w") as f:
-            json.dump(aggregated, f, indent=2)
+            json.dump(json_safe(aggregated), f, indent=2)
 
         summary[f"n_{scope}"] = len(idx)
         for metric, value in _flatten(aggregated).items():
@@ -290,7 +290,7 @@ def run_one(exp: Dict[str, Any], base: Dict[str, Any], qa: Dict[str, Any],
 
     summary["minutes"] = round((time.time() - started) / 60, 1)
     with open(run_dir / "summary.json", "w") as f:
-        json.dump(summary, f, indent=2)
+        json.dump(json_safe(summary), f, indent=2)
     logger.info(f"=== {name} done in {summary['minutes']} min ===")
     return summary
 

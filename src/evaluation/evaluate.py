@@ -22,6 +22,34 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def json_safe(obj: Any) -> Any:
+    """
+    Convert numpy scalars and arrays into plain Python types.
+
+    Counts and means come back from numpy as int64 and float64, which the json module
+    refuses to serialise.
+
+    Args:
+        obj: Any nested structure of dicts, lists and scalars
+
+    Returns:
+        The same structure using built-in types
+    """
+    if isinstance(obj, dict):
+        return {k: json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [json_safe(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return json_safe(obj.tolist())
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    return obj
+
+
 class RetrievalEvaluator:
     """Evaluates retrieval performance."""
 
@@ -501,7 +529,7 @@ class RAGEvaluator:
         # Save aggregated results
         aggregated_path = os.path.join(output_dir, f"aggregated_results_{timestamp}.json")
         with open(aggregated_path, 'w') as f:
-            json.dump(aggregated, f, indent=2)
+            json.dump(json_safe(aggregated), f, indent=2)
         logger.info(f"Saved aggregated results to {aggregated_path}")
 
         # Save as CSV too for easy viewing
