@@ -247,10 +247,14 @@ def chunk_text_fixed_size(text: str, chunk_size: int = 512,
         chunk_text = encoding.decode(chunk_tokens)
         chunks.append(chunk_text)
 
+        # Stop once the final chunk has reached the end. Advancing by chunk_size - overlap
+        # otherwise leaves start stuck at len(tokens) - overlap, which never satisfies a
+        # start-based guard, so the last window repeats forever.
+        if end >= len(tokens):
+            break
+
         # Move start position (accounting for overlap)
         start = end - overlap
-        if start >= len(tokens):  # Prevent infinite loop
-            break
 
     return chunks
 
