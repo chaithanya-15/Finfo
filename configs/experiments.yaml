@@ -63,3 +63,7 @@ experiments:
     overrides:
       generation:
         model_name: "gemma-4-E2B"
+        # gemma-4-E2B's per-layer-embedding architecture crashes llama.cpp's Metal backend
+        # on the first decode, so this generator runs on CPU. Retrieval is identical to the
+        # baseline, so the comparison stays fair; only generation speed differs.
+        device: "cpu"
