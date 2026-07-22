@@ -272,22 +272,40 @@ def chunk_by_structure(text: str, elements: list = None,
     Returns:
         List of chunks with metadata
     """
-    # For simplicity, we'll use a hybrid approach:
-    # Split by double newlines (paragraphs/sections) and then apply size limits
-    # In a more sophisticated implementation, we would use the element boundaries
-
-    # Split by blank lines to get rough sections
-    sections = re.split(r'\n\s*\n', text)
-    sections = [s.strip() for s in sections if s.strip()]
-
-    chunks = []
-    current_chunk = []
-    current_length = 0
-
+    # Structure-aware chunking packs whole sentences up to the size limit, so a chunk never
+    # ends mid-sentence the way fixed-size windows do. Paragraph breaks are used as unit
+    # boundaries when they survive cleaning; where the text has been flattened to a single
+    # block, sentences become the units. Any unit still larger than the limit (for example a
+    # wide table rendered as one long line) is split into fixed token windows as a fallback so
+    # no single chunk overflows.
     try:
         encoding = tiktoken.get_encoding("cl100k_base")
     except KeyError:
         encoding = tiktoken.get_encoding("cl100k_base")
+
+    raw_sections = re.split(r'\n\s*\n', text)
+    sections = []
+    for raw in raw_sections:
+        raw = raw.strip()
+        if not raw:
+            continue
+        if len(encoding.encode(raw)) <= max_chunk_size:
+            sections.append(raw)
+            continue
+        # Oversized section: break into sentences.
+        for sentence in re.split(r'(?<=[.!?])\s+', raw):
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            if len(encoding.encode(sentence)) <= max_chunk_size:
+                sections.append(sentence)
+            else:
+                # Still too large (e.g. a flattened table): fall back to token windows.
+                sections.extend(chunk_text_fixed_size(sentence, chunk_size=max_chunk_size, overlap=0))
+
+    chunks = []
+    current_chunk = []
+    current_length = 0
 
     for section in sections:
         section_tokens = encoding.encode(section)
