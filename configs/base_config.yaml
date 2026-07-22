@@ -12,10 +12,10 @@ retrieval:
   embedding_model: BAAI/bge-base-en-v1.5
   store_type: faiss
   index_name: financebench_index
-  batch_size: 32
+  batch_size: 128
   chunks_dir: data/processed_chunks
 generation:
-  model_name: Qwen3.5-4B  # local 4-bit GGUF, resolved by src/generation/generate.py
+  model_name: Qwen3.5-4B
   device: auto
   load_in_4bit: true
   generation_kwargs:
@@ -25,6 +25,6 @@ generation:
     repetition_penalty: 1.1
 evaluation:
   qa_data_path: data/financebench_open_source.jsonl
-  max_examples: null  # null runs all 150 questions
+  max_examples: null
   retrieval_k: 5
   output_dir: results

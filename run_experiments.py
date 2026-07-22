@@ -18,6 +18,17 @@ Usage:
 """
 
 import os
+
+# Set before torch, faiss, or sentence-transformers import. faiss and torch both link an
+# OpenMP runtime on macOS; without this they abort with a duplicate-libomp segfault the first
+# time a FAISS search runs alongside a torch model. Offline mode stops sentence-transformers
+# making slow network HEAD requests to check for model updates on every load.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 import sys
 import json
 import copy
