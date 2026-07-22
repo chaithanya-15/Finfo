@@ -288,6 +288,64 @@ class GenerationEvaluator:
 class CitationEvaluator:
     """Evaluates citation performance."""
 
+    CITATION_PATTERN = r'\[[^\]]+_[cp]\d+\]'
+
+    @staticmethod
+    def extract_citations(answer: str) -> List[str]:
+        """
+        Pull the citation tags out of an answer.
+
+        Args:
+            answer: Generated answer text
+
+        Returns:
+            Citation tags in the order they appear, including brackets
+        """
+        return re.findall(CitationEvaluator.CITATION_PATTERN, answer)
+
+    @staticmethod
+    def valid_citation_keys(contexts: List[Dict[str, Any]]) -> set:
+        """
+        Build the set of citation tags that the retrieved contexts justify.
+
+        Args:
+            contexts: List of retrieved context dictionaries
+
+        Returns:
+            Set of valid citation tags
+        """
+        keys = set()
+        for ctx in contexts:
+            doc_name = ctx.get('doc_name', 'unknown')
+            chunk_index = ctx.get('chunk_index')
+            page_number = ctx.get('evidence_page_num', ctx.get('page_number'))
+            if chunk_index is not None:
+                keys.add(f"[{doc_name}_c{chunk_index}]")
+            if page_number is not None:
+                keys.add(f"[{doc_name}_p{page_number}]")
+        return keys
+
+    @staticmethod
+    def validate_citations(answer: str, contexts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Check an answer's citations against the contexts it was given.
+
+        Args:
+            answer: Generated answer text
+            contexts: List of retrieved context dictionaries
+
+        Returns:
+            Counts of total and valid citations, and whether every citation is valid
+        """
+        citations = CitationEvaluator.extract_citations(answer)
+        valid_keys = CitationEvaluator.valid_citation_keys(contexts)
+        valid = [c for c in citations if c in valid_keys]
+        return {
+            "num_citations": len(citations),
+            "num_valid_citations": len(valid),
+            "all_citations_valid": len(citations) > 0 and len(valid) == len(citations),
+        }
+
     @staticmethod
     def citation_precision(answer: str, contexts: List[Dict[str, Any]]) -> float:
         """
