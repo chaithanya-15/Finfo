@@ -18,7 +18,8 @@ project/
 │   └── evaluation/           # metrics calculation, evaluation pipeline
 ├── configs/                  # YAML config files for experiments
 ├── results/                  # experiment results
-│   ├── metrics.csv
+│   ├── experiments/          # per-configuration metrics + comparison.csv
+│   ├── results_summary.md    # tables generated from the sweep
 │   └── figures/
 └── report/
     └── template.md           # skeleton for the final report
@@ -42,17 +43,23 @@ project/
    ```bash
    uv pip install -r requirements.txt
    ```
-   On Apple silicon, build the generator backend against Metal:
+   The generator backend, `llama-cpp-python`, is built for the local accelerator. On Apple
+   silicon that means Metal:
    ```bash
    CMAKE_ARGS="-DGGML_METAL=on" uv pip install llama-cpp-python
    ```
+   On Linux or Windows with an NVIDIA GPU, use `-DGGML_CUDA=on` instead; with no GPU, a plain
+   `uv pip install llama-cpp-python` builds a CPU version. The embedding step selects MPS,
+   CUDA, or CPU automatically, so the rest of the pipeline is unchanged across platforms.
 
-4. **Fetch the generator weights.** The generator reads 4-bit GGUF files from the Hugging
-   Face cache. Names map to files in `LOCAL_MODEL_PATTERNS` in `src/generation/generate.py`:
+4. **Fetch the generator weights.** Both generators are 4-bit or 8-bit GGUF files resolved
+   from the Hugging Face cache (see `LOCAL_MODEL_PATTERNS` in `src/generation/generate.py`):
    ```bash
    huggingface-cli download unsloth/Qwen3.5-4B-GGUF Qwen3.5-4B-UD-Q4_K_XL.gguf
-   huggingface-cli download unsloth/gemma-4-E2B-it-GGUF gemma-4-E2B-it-UD-Q4_K_XL.gguf
+   huggingface-cli download lmstudio-community/gemma-4-12B-it-GGUF gemma-4-12B-it-Q8_0.gguf
    ```
+   Qwen3.5-4B is the baseline generator; gemma-4-12B is the second-generator ablation arm.
+   An existing LM Studio copy of gemma-4-12B is reused if present.
 
 5. **The FinanceBench metadata** is already in `data/`:
    `financebench_document_information.jsonl` and `financebench_open_source.jsonl`.
