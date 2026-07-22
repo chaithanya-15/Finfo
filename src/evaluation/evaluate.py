@@ -249,7 +249,14 @@ class GenerationEvaluator:
         """
         try:
             from sentence_transformers import SentenceTransformer
-            model = SentenceTransformer(model_name)
+
+            # Load the scoring model once and keep it on CPU. It only ever encodes two short
+            # strings per call, so the GPU buys nothing, and staying off the GPU avoids a
+            # crash when a generator (for example gemma's llama.cpp context) has left the
+            # Metal backend in a state that a fresh MPS model load cannot survive.
+            if getattr(GenerationEvaluator, "_semantic_model", None) is None:
+                GenerationEvaluator._semantic_model = SentenceTransformer(model_name, device="cpu")
+            model = GenerationEvaluator._semantic_model
 
             # Encode texts
             gen_embedding = model.encode([generated_text])
