@@ -380,3 +380,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # All results are flushed to disk by now. Exit before the interpreter tears down the
+    # llama.cpp Metal context, whose destructor aborts (SIGABRT) on this platform and would
+    # otherwise turn a successful run into a non-zero exit.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)
