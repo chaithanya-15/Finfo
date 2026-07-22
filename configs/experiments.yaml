@@ -58,12 +58,11 @@ experiments:
 
   - name: gen_gemma
     axis: generation_model
-    note: same retrieval as baseline, different generator family
+    note: same retrieval as baseline, larger different-family generator
     generate: true
     overrides:
       generation:
-        model_name: "gemma-4-E2B"
-        # gemma-4-E2B's per-layer-embedding architecture crashes llama.cpp's Metal backend
-        # on the first decode, so this generator runs on CPU. Retrieval is identical to the
-        # baseline, so the comparison stays fair; only generation speed differs.
-        device: "cpu"
+        # gemma-4-12B is a different family and larger than the Qwen3.5-4B baseline. Its
+        # standard architecture runs on the Metal GPU, unlike gemma-4-E2B whose nested
+        # design segfaults llama.cpp's Metal backend on the first decode.
+        model_name: "gemma-4-12B"
