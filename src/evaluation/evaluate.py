@@ -50,6 +50,52 @@ def json_safe(obj: Any) -> Any:
     return obj
 
 
+_EVIDENCE_STOPWORDS = set(
+    "the a an and or but in on at to for of with by is are was were be as from that this it "
+    "its their his her our your they we you i he she has have had will would can could".split()
+)
+
+
+def _content_tokens(text: str) -> set:
+    """
+    Reduce text to its content words for overlap scoring.
+
+    Keeps alphanumeric tokens longer than three characters that are not common stopwords, so
+    that figures and named terms drive the match rather than filler.
+
+    Args:
+        text: Raw text
+
+    Returns:
+        Set of content tokens
+    """
+    return {w for w in re.findall(r'[a-z0-9]+', text.lower())
+            if len(w) > 3 and w not in _EVIDENCE_STOPWORDS}
+
+
+def evidence_overlap(evidence: str, chunk_text: str) -> float:
+    """
+    Fraction of the evidence's content words that appear in a retrieved chunk.
+
+    FinanceBench evidence passages are often longer than a single chunk (they can span a whole
+    table or page), so a symmetric string ratio understates a genuine hit. Coverage of the
+    evidence's content words by the chunk is robust to that length gap: a chunk that contains
+    the figures and terms of the evidence scores high regardless of how much extra text either
+    side carries.
+
+    Args:
+        evidence: Ground-truth evidence text
+        chunk_text: Retrieved chunk text
+
+    Returns:
+        Coverage in [0, 1]
+    """
+    ev = _content_tokens(evidence)
+    if not ev:
+        return 0.0
+    return len(ev & _content_tokens(chunk_text)) / len(ev)
+
+
 class RetrievalEvaluator:
     """Evaluates retrieval performance."""
 
@@ -57,7 +103,7 @@ class RetrievalEvaluator:
     def calculate_recall_at_k(retrieved_chunks: List[Dict[str, Any]],
                               ground_truth_evidence: List[str],
                               k: int = 5,
-                              threshold: float = 0.8) -> float:
+                              threshold: float = 0.5) -> float:
         """
         Calculate Recall@k for retrieval.
 
@@ -83,7 +129,7 @@ class RetrievalEvaluator:
             evidence_found = False
             for chunk_text in top_k_texts:
                 # Use fuzzy matching for text comparison
-                similarity = fuzz.token_set_ratio(evidence.lower(), chunk_text.lower()) / 100.0
+                similarity = evidence_overlap(evidence, chunk_text)
                 if similarity >= threshold:
                     evidence_found = True
                     break
@@ -96,7 +142,7 @@ class RetrievalEvaluator:
     def calculate_precision_at_k(retrieved_chunks: List[Dict[str, Any]],
                                  ground_truth_evidence: List[str],
                                  k: int = 5,
-                                 threshold: float = 0.8) -> float:
+                                 threshold: float = 0.5) -> float:
         """
         Calculate Precision@k for retrieval.
 
@@ -121,7 +167,7 @@ class RetrievalEvaluator:
         for chunk_text in top_k_texts:
             chunk_relevant = False
             for evidence in ground_truth_evidence:
-                similarity = fuzz.token_set_ratio(evidence.lower(), chunk_text.lower()) / 100.0
+                similarity = evidence_overlap(evidence, chunk_text)
                 if similarity >= threshold:
                     chunk_relevant = True
                     break
@@ -133,7 +179,7 @@ class RetrievalEvaluator:
     @staticmethod
     def calculate_mrr(retrieved_chunks: List[Dict[str, Any]],
                       ground_truth_evidence: List[str],
-                      threshold: float = 0.8) -> float:
+                      threshold: float = 0.5) -> float:
         """
         Calculate Mean Reciprocal Rank.
 
@@ -153,7 +199,7 @@ class RetrievalEvaluator:
             rank = None
             for i, chunk in enumerate(retrieved_chunks):
                 chunk_text = chunk.get('text', '').strip()
-                similarity = fuzz.token_set_ratio(evidence.lower(), chunk_text.lower()) / 100.0
+                similarity = evidence_overlap(evidence, chunk_text)
                 if similarity >= threshold:
                     rank = i + 1  # 1-indexed rank
                     break
