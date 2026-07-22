@@ -4,12 +4,22 @@
 # large source corpus, regenerate with: python -m src.data_processing.download_pdfs
 data/raw_pdfs/
 data/processed_chunks/
+data/extracted_text/
 
-# experiment outputs
+# vector indexes, rebuilt from chunks
+indexes/
+*_chroma_db/
+
+# experiment outputs: keep the report-facing summaries, drop the bulky per-question dumps
 results/*
 !results/.gitkeep
+!results/results_summary.md
 !results/figures/
 !results/figures/.gitkeep
+!results/figures/*.png
+!results/experiments/
+results/experiments/*
+!results/experiments/comparison.csv
 
 # python
 __pycache__/

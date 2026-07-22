@@ -18,7 +18,8 @@ project/
 │   └── evaluation/           # metrics calculation, evaluation pipeline
 ├── configs/                  # YAML config files for experiments
 ├── results/                  # experiment results
-│   ├── metrics.csv
+│   ├── experiments/          # per-configuration metrics + comparison.csv
+│   ├── results_summary.md    # tables generated from the sweep
 │   └── figures/
 └── report/
     └── template.md           # skeleton for the final report
@@ -31,44 +32,76 @@ project/
    curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
-2. **Create a virtual environment with Python 3.14**:
+2. **Create a virtual environment**:
    ```bash
-   uv python install 3.14
-   uv venv --python 3.14
+   uv venv --python 3.12
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
+   Python 3.12 rather than 3.14, because faiss and chromadb do not publish 3.14 wheels.
 
 3. **Install dependencies**:
    ```bash
    uv pip install -r requirements.txt
    ```
+   The generator backend, `llama-cpp-python`, is built for the local accelerator. On Apple
+   silicon that means Metal:
+   ```bash
+   CMAKE_ARGS="-DGGML_METAL=on" uv pip install llama-cpp-python
+   ```
+   On Linux or Windows with an NVIDIA GPU, use `-DGGML_CUDA=on` instead; with no GPU, a plain
+   `uv pip install llama-cpp-python` builds a CPU version. The embedding step selects MPS,
+   CUDA, or CPU automatically, so the rest of the pipeline is unchanged across platforms.
 
-4. **Download the FinanceBench dataset** (if not already present):
-   - The dataset files should be in the `data/` directory:
-     - `financebench_document_information.jsonl`
-     - `financebench_open_source.jsonl`
+4. **Fetch the generator weights.** Both generators are 4-bit or 8-bit GGUF files resolved
+   from the Hugging Face cache (see `LOCAL_MODEL_PATTERNS` in `src/generation/generate.py`):
+   ```bash
+   huggingface-cli download unsloth/Qwen3.5-4B-GGUF Qwen3.5-4B-UD-Q4_K_XL.gguf
+   huggingface-cli download lmstudio-community/gemma-4-12B-it-GGUF gemma-4-12B-it-Q8_0.gguf
+   ```
+   Qwen3.5-4B is the baseline generator; gemma-4-12B is the second-generator ablation arm.
+   An existing LM Studio copy of gemma-4-12B is reused if present.
+
+5. **The FinanceBench metadata** is already in `data/`:
+   `financebench_document_information.jsonl` and `financebench_open_source.jsonl`.
 
 ## Usage
 
-### Step 1: Download PDFs
+### Step 1: Download the PDFs
 ```bash
 python -m src.data_processing.download_pdfs
 ```
+Expect around 282 of the 360 documents to arrive. See "Corpus coverage" below.
 
-### Step 2: Process documents (extract text, clean, chunk)
+### Step 2: Run the full ablation sweep
 ```bash
-python -m src.data_processing.ingest
+python run_experiments.py
+```
+This extracts text (cached under `data/extracted_text/`), chunks each document under every
+strategy the sweep needs, builds one vector index per embedding model and chunk strategy,
+then retrieves, generates and scores. Results land in `results/experiments/`, one directory
+per configuration plus a `comparison.csv` across all of them.
+
+Useful variants:
+```bash
+python run_experiments.py --limit 20            # quick smoke run
+python run_experiments.py --only baseline k_10  # named configurations
 ```
 
-### Step 3: Run evaluation pipeline
-```bash
-python -m src.evaluation.evaluate
-```
-
-Or use the provided pipeline runner:
+### Running a single configuration
 ```bash
 python run_pipeline.py --step all --config configs/base_config.yaml
 ```
+
+## Corpus coverage
+
+FinanceBench's document manifest lists 360 filings, but 78 of the source URLs are dead:
+they return timeouts, 404s or 403s from the companies' investor-relations hosts. The links
+are broken at the source, so re-running the download does not recover them.
+
+So **32 of the 150 evaluation questions ask about a document that cannot be retrieved**. `run_experiments.py` therefore reports every metric twice, over
+all 150 questions and over the 118 answerable ones. The first number describes the system
+as deployed against this corpus; the second isolates retrieval and generation quality from
+the missing data.
 
 ## Configuration
 

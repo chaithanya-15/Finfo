@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 # Add src to path
-sys.path.append(str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 def example_data_processing():
     """Example of using the data processing module."""

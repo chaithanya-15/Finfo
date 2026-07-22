@@ -22,6 +22,80 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def json_safe(obj: Any) -> Any:
+    """
+    Convert numpy scalars and arrays into plain Python types.
+
+    Counts and means come back from numpy as int64 and float64, which the json module
+    refuses to serialise.
+
+    Args:
+        obj: Any nested structure of dicts, lists and scalars
+
+    Returns:
+        The same structure using built-in types
+    """
+    if isinstance(obj, dict):
+        return {k: json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [json_safe(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return json_safe(obj.tolist())
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    return obj
+
+
+_EVIDENCE_STOPWORDS = set(
+    "the a an and or but in on at to for of with by is are was were be as from that this it "
+    "its their his her our your they we you i he she has have had will would can could".split()
+)
+
+
+def _content_tokens(text: str) -> set:
+    """
+    Reduce text to its content words for overlap scoring.
+
+    Keeps alphanumeric tokens longer than three characters that are not common stopwords, so
+    that figures and named terms drive the match rather than filler.
+
+    Args:
+        text: Raw text
+
+    Returns:
+        Set of content tokens
+    """
+    return {w for w in re.findall(r'[a-z0-9]+', text.lower())
+            if len(w) > 3 and w not in _EVIDENCE_STOPWORDS}
+
+
+def evidence_overlap(evidence: str, chunk_text: str) -> float:
+    """
+    Fraction of the evidence's content words that appear in a retrieved chunk.
+
+    FinanceBench evidence passages are often longer than a single chunk (they can span a whole
+    table or page), so a symmetric string ratio understates a genuine hit. Coverage of the
+    evidence's content words by the chunk is robust to that length gap: a chunk that contains
+    the figures and terms of the evidence scores high regardless of how much extra text either
+    side carries.
+
+    Args:
+        evidence: Ground-truth evidence text
+        chunk_text: Retrieved chunk text
+
+    Returns:
+        Coverage in [0, 1]
+    """
+    ev = _content_tokens(evidence)
+    if not ev:
+        return 0.0
+    return len(ev & _content_tokens(chunk_text)) / len(ev)
+
+
 class RetrievalEvaluator:
     """Evaluates retrieval performance."""
 
@@ -29,7 +103,7 @@ class RetrievalEvaluator:
     def calculate_recall_at_k(retrieved_chunks: List[Dict[str, Any]],
                               ground_truth_evidence: List[str],
                               k: int = 5,
-                              threshold: float = 0.8) -> float:
+                              threshold: float = 0.5) -> float:
         """
         Calculate Recall@k for retrieval.
 
@@ -55,7 +129,7 @@ class RetrievalEvaluator:
             evidence_found = False
             for chunk_text in top_k_texts:
                 # Use fuzzy matching for text comparison
-                similarity = fuzz.token_set_ratio(evidence.lower(), chunk_text.lower()) / 100.0
+                similarity = evidence_overlap(evidence, chunk_text)
                 if similarity >= threshold:
                     evidence_found = True
                     break
@@ -68,7 +142,7 @@ class RetrievalEvaluator:
     def calculate_precision_at_k(retrieved_chunks: List[Dict[str, Any]],
                                  ground_truth_evidence: List[str],
                                  k: int = 5,
-                                 threshold: float = 0.8) -> float:
+                                 threshold: float = 0.5) -> float:
         """
         Calculate Precision@k for retrieval.
 
@@ -93,7 +167,7 @@ class RetrievalEvaluator:
         for chunk_text in top_k_texts:
             chunk_relevant = False
             for evidence in ground_truth_evidence:
-                similarity = fuzz.token_set_ratio(evidence.lower(), chunk_text.lower()) / 100.0
+                similarity = evidence_overlap(evidence, chunk_text)
                 if similarity >= threshold:
                     chunk_relevant = True
                     break
@@ -105,7 +179,7 @@ class RetrievalEvaluator:
     @staticmethod
     def calculate_mrr(retrieved_chunks: List[Dict[str, Any]],
                       ground_truth_evidence: List[str],
-                      threshold: float = 0.8) -> float:
+                      threshold: float = 0.5) -> float:
         """
         Calculate Mean Reciprocal Rank.
 
@@ -125,7 +199,7 @@ class RetrievalEvaluator:
             rank = None
             for i, chunk in enumerate(retrieved_chunks):
                 chunk_text = chunk.get('text', '').strip()
-                similarity = fuzz.token_set_ratio(evidence.lower(), chunk_text.lower()) / 100.0
+                similarity = evidence_overlap(evidence, chunk_text)
                 if similarity >= threshold:
                     rank = i + 1  # 1-indexed rank
                     break
@@ -175,7 +249,14 @@ class GenerationEvaluator:
         """
         try:
             from sentence_transformers import SentenceTransformer
-            model = SentenceTransformer(model_name)
+
+            # Load the scoring model once and keep it on CPU. It only ever encodes two short
+            # strings per call, so the GPU buys nothing, and staying off the GPU avoids a
+            # crash when a generator (for example gemma's llama.cpp context) has left the
+            # Metal backend in a state that a fresh MPS model load cannot survive.
+            if getattr(GenerationEvaluator, "_semantic_model", None) is None:
+                GenerationEvaluator._semantic_model = SentenceTransformer(model_name, device="cpu")
+            model = GenerationEvaluator._semantic_model
 
             # Encode texts
             gen_embedding = model.encode([generated_text])
@@ -213,6 +294,64 @@ class GenerationEvaluator:
 
 class CitationEvaluator:
     """Evaluates citation performance."""
+
+    CITATION_PATTERN = r'\[[^\]]+_[cp]\d+\]'
+
+    @staticmethod
+    def extract_citations(answer: str) -> List[str]:
+        """
+        Pull the citation tags out of an answer.
+
+        Args:
+            answer: Generated answer text
+
+        Returns:
+            Citation tags in the order they appear, including brackets
+        """
+        return re.findall(CitationEvaluator.CITATION_PATTERN, answer)
+
+    @staticmethod
+    def valid_citation_keys(contexts: List[Dict[str, Any]]) -> set:
+        """
+        Build the set of citation tags that the retrieved contexts justify.
+
+        Args:
+            contexts: List of retrieved context dictionaries
+
+        Returns:
+            Set of valid citation tags
+        """
+        keys = set()
+        for ctx in contexts:
+            doc_name = ctx.get('doc_name', 'unknown')
+            chunk_index = ctx.get('chunk_index')
+            page_number = ctx.get('evidence_page_num', ctx.get('page_number'))
+            if chunk_index is not None:
+                keys.add(f"[{doc_name}_c{chunk_index}]")
+            if page_number is not None:
+                keys.add(f"[{doc_name}_p{page_number}]")
+        return keys
+
+    @staticmethod
+    def validate_citations(answer: str, contexts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Check an answer's citations against the contexts it was given.
+
+        Args:
+            answer: Generated answer text
+            contexts: List of retrieved context dictionaries
+
+        Returns:
+            Counts of total and valid citations, and whether every citation is valid
+        """
+        citations = CitationEvaluator.extract_citations(answer)
+        valid_keys = CitationEvaluator.valid_citation_keys(contexts)
+        valid = [c for c in citations if c in valid_keys]
+        return {
+            "num_citations": len(citations),
+            "num_valid_citations": len(valid),
+            "all_citations_valid": len(citations) > 0 and len(valid) == len(citations),
+        }
 
     @staticmethod
     def citation_precision(answer: str, contexts: List[Dict[str, Any]]) -> float:
@@ -501,7 +640,7 @@ class RAGEvaluator:
         # Save aggregated results
         aggregated_path = os.path.join(output_dir, f"aggregated_results_{timestamp}.json")
         with open(aggregated_path, 'w') as f:
-            json.dump(aggregated, f, indent=2)
+            json.dump(json_safe(aggregated), f, indent=2)
         logger.info(f"Saved aggregated results to {aggregated_path}")
 
         # Save as CSV too for easy viewing

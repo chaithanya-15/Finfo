@@ -1,32 +1,30 @@
-# Default configuration for FinanceBench RAG project
+# Default configuration for FinanceBench RAG project.
+# Ablation runs inherit this file and override individual keys, see configs/experiments.yaml.
 data_acquisition:
-  output_dir: "data/raw_pdfs"
-
+  output_dir: data/raw_pdfs
 corpus_processing:
-  pdf_dir: "data/raw_pdfs"
-  output_dir: "data/processed_chunks"
-  chunk_strategies: ["fixed_256_overlap32", "fixed_512_overlap64", "structure"]
-  extract_method: "unstructured"
-
+  pdf_dir: data/raw_pdfs
+  output_dir: data/processed_chunks
+  chunk_strategies:
+  - fixed_512_overlap64
+  extract_method: pdfplumber
 retrieval:
-  embedding_model: "BAAI/bge-base-en-v1.5"
-  store_type: "faiss"
-  index_name: "financebench_index"
-  batch_size: 32
-  chunks_dir: "data/processed_chunks"
-
+  embedding_model: BAAI/bge-base-en-v1.5
+  store_type: faiss
+  index_name: financebench_index
+  batch_size: 128
+  chunks_dir: data/processed_chunks
 generation:
-  model_name: "meta-llama/Llama-3.1-8B-Instruct"
-  device: "auto"
+  model_name: Qwen3.5-4B
+  device: auto
   load_in_4bit: true
   generation_kwargs:
     max_new_tokens: 256
     temperature: 0.1
     top_p: 0.95
     repetition_penalty: 1.1
-
 evaluation:
-  qa_data_path: "data/financebench_open_source.jsonl"
-  max_examples: 50  # Set to None for full evaluation
+  qa_data_path: data/financebench_open_source.jsonl
+  max_examples: null
   retrieval_k: 5
-  output_dir: "results"
+  output_dir: results

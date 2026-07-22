@@ -1,0 +1,68 @@
+# Ablation matrix for the experimental analysis.
+#
+# Every entry inherits configs/base_config.yaml and overrides the keys listed under
+# `overrides`. `axis` records which design decision the run isolates, so the results table
+# can be grouped by it.
+#
+# `generate: false` runs retrieval scoring only. Retrieval metrics do not depend on the
+# generator, and skipping generation keeps the sweep to a few hours instead of a full day.
+
+experiments:
+
+  - name: baseline
+    axis: reference
+    note: 512-token chunks, bge-base embeddings, k=5, Qwen3.5-4B generator
+    generate: true
+    overrides: {}
+
+  - name: chunk_256
+    axis: chunk_size
+    note: halves the chunk to 256 tokens with proportional overlap
+    generate: true
+    overrides:
+      corpus_processing:
+        chunk_strategies: ["fixed_256_overlap32"]
+
+  - name: chunk_structure
+    axis: chunk_size
+    note: segments on document structure instead of a fixed token window
+    generate: true
+    overrides:
+      corpus_processing:
+        chunk_strategies: ["structure"]
+
+  - name: k_3
+    axis: retrieval_k
+    note: fewer passages, less context but less distraction
+    generate: false
+    overrides:
+      evaluation:
+        retrieval_k: 3
+
+  - name: k_10
+    axis: retrieval_k
+    note: more passages, higher recall ceiling at the cost of prompt noise
+    generate: false
+    overrides:
+      evaluation:
+        retrieval_k: 10
+
+  - name: embed_minilm
+    axis: embedding_model
+    note: 384-dim MiniLM against the 768-dim bge-base baseline
+    generate: false
+    overrides:
+      retrieval:
+        embedding_model: "all-MiniLM-L6-v2"
+        index_name: "financebench_minilm"
+
+  - name: gen_gemma
+    axis: generation_model
+    note: same retrieval as baseline, larger different-family generator
+    generate: true
+    overrides:
+      generation:
+        # gemma-4-12B is a different family and larger than the Qwen3.5-4B baseline. Its
+        # standard architecture runs on the Metal GPU, unlike gemma-4-E2B whose nested
+        # design segfaults llama.cpp's Metal backend on the first decode.
+        model_name: "gemma-4-12B"

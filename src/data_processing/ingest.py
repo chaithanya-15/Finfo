@@ -11,8 +11,8 @@ from typing import List, Dict, Any, Tuple, Optional
 import pandas as pd
 import pypdf
 import pdfplumber
-from unstructured.partition.pdf import partition_pdf
-from unstructured.documents.elements import Table, Title, NarrativeText
+# unstructured is imported inside extract_text_unstructured. It pulls in layout-detection
+# models that take minutes to load and are only needed for that one extraction method.
 import tiktoken
 from pathlib import Path
 import logging
@@ -116,6 +116,9 @@ def extract_text_unstructured(pdf_path: str) -> tuple[str, list]:
         Tuple of (text, elements)
     """
     try:
+        from unstructured.partition.pdf import partition_pdf
+        from unstructured.documents.elements import Table, Title, NarrativeText
+
         elements = partition_pdf(
             pdf_path,
             strategy="hi_res",  # High-resolution strategy for better structure detection
@@ -141,13 +144,19 @@ def extract_text_unstructured(pdf_path: str) -> tuple[str, list]:
         return "", []
 
 
-def extract_document_text(pdf_path: str, method: str = "unstructured") -> tuple[str, list]:
+def extract_document_text(pdf_path: str, method: str = "unstructured",
+                          cache_dir: str = "data/extracted_text") -> tuple[str, list]:
     """
     Extract text from PDF using specified method.
+
+    Results are cached per document and method. Every chunking strategy re-reads the same
+    PDF, and extraction dominates the runtime, so without the cache a three-strategy run
+    over the corpus pays for extraction three times.
 
     Args:
         pdf_path: Path to PDF file
         method: Extraction method ('pypdf', 'pdfplumber', or 'unstructured')
+        cache_dir: Directory holding cached extractions, set to None to disable
 
     Returns:
         Tuple of (text, tables_or_elements)
@@ -156,6 +165,39 @@ def extract_document_text(pdf_path: str, method: str = "unstructured") -> tuple[
         logger.error(f"PDF file not found: {pdf_path}")
         return "", []
 
+    cache_path = None
+    if cache_dir:
+        doc_name = Path(pdf_path).stem
+        cache_path = Path(cache_dir) / method / f"{doc_name}.json"
+        if cache_path.exists():
+            try:
+                with open(cache_path, 'r') as f:
+                    cached = json.load(f)
+                return cached["text"], cached["extra"]
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning(f"Ignoring unreadable cache {cache_path}: {e}")
+
+    text, extra = _extract_uncached(pdf_path, method)
+
+    if cache_path is not None and text.strip():
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(cache_path, 'w') as f:
+            json.dump({"text": text, "extra": extra}, f)
+
+    return text, extra
+
+
+def _extract_uncached(pdf_path: str, method: str) -> tuple[str, list]:
+    """
+    Run the requested extractor without consulting the cache.
+
+    Args:
+        pdf_path: Path to PDF file
+        method: Extraction method ('pypdf', 'pdfplumber', or 'unstructured')
+
+    Returns:
+        Tuple of (text, tables_or_elements)
+    """
     if method == "pypdf":
         text = extract_text_pypdf(pdf_path)
         return text, []
@@ -205,10 +247,14 @@ def chunk_text_fixed_size(text: str, chunk_size: int = 512,
         chunk_text = encoding.decode(chunk_tokens)
         chunks.append(chunk_text)
 
+        # Stop once the final chunk has reached the end. Advancing by chunk_size - overlap
+        # otherwise leaves start stuck at len(tokens) - overlap, which never satisfies a
+        # start-based guard, so the last window repeats forever.
+        if end >= len(tokens):
+            break
+
         # Move start position (accounting for overlap)
         start = end - overlap
-        if start >= len(tokens):  # Prevent infinite loop
-            break
 
     return chunks
 
@@ -226,22 +272,40 @@ def chunk_by_structure(text: str, elements: list = None,
     Returns:
         List of chunks with metadata
     """
-    # For simplicity, we'll use a hybrid approach:
-    # Split by double newlines (paragraphs/sections) and then apply size limits
-    # In a more sophisticated implementation, we would use the element boundaries
-
-    # Split by blank lines to get rough sections
-    sections = re.split(r'\n\s*\n', text)
-    sections = [s.strip() for s in sections if s.strip()]
-
-    chunks = []
-    current_chunk = []
-    current_length = 0
-
+    # Structure-aware chunking packs whole sentences up to the size limit, so a chunk never
+    # ends mid-sentence the way fixed-size windows do. Paragraph breaks are used as unit
+    # boundaries when they survive cleaning; where the text has been flattened to a single
+    # block, sentences become the units. Any unit still larger than the limit (for example a
+    # wide table rendered as one long line) is split into fixed token windows as a fallback so
+    # no single chunk overflows.
     try:
         encoding = tiktoken.get_encoding("cl100k_base")
     except KeyError:
         encoding = tiktoken.get_encoding("cl100k_base")
+
+    raw_sections = re.split(r'\n\s*\n', text)
+    sections = []
+    for raw in raw_sections:
+        raw = raw.strip()
+        if not raw:
+            continue
+        if len(encoding.encode(raw)) <= max_chunk_size:
+            sections.append(raw)
+            continue
+        # Oversized section: break into sentences.
+        for sentence in re.split(r'(?<=[.!?])\s+', raw):
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            if len(encoding.encode(sentence)) <= max_chunk_size:
+                sections.append(sentence)
+            else:
+                # Still too large (e.g. a flattened table): fall back to token windows.
+                sections.extend(chunk_text_fixed_size(sentence, chunk_size=max_chunk_size, overlap=0))
+
+    chunks = []
+    current_chunk = []
+    current_length = 0
 
     for section in sections:
         section_tokens = encoding.encode(section)
