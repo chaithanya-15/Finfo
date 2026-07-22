@@ -91,7 +91,21 @@ def load_qa_data(path: str, pdf_dir: str, limit: Optional[int] = None) -> Dict[s
     if limit:
         rows = rows[:limit]
 
-    available = {p.stem for p in Path(pdf_dir).glob("*.pdf")}
+    # A document counts as available only if extraction produced usable text. Some
+    # downloaded PDFs are corrupt (no valid root object) or near-empty stubs, so the mere
+    # presence of a .pdf file overstates coverage. Fall back to PDF presence only when the
+    # extraction cache has not been built yet.
+    extract_cache = Path("data/extracted_text/pdfplumber")
+    available = set()
+    if extract_cache.exists():
+        for jf in extract_cache.glob("*.json"):
+            try:
+                if json.load(open(jf)).get("text", "").strip():
+                    available.add(jf.stem)
+            except (json.JSONDecodeError, OSError):
+                continue
+    else:
+        available = {p.stem for p in Path(pdf_dir).glob("*.pdf")}
 
     evidence_list = []
     for row in rows:
