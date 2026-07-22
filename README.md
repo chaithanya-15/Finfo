@@ -123,7 +123,7 @@ The evaluation pipeline computes:
 
 The full ablation has been run. Per-configuration metrics are in `results/experiments/`
 (with `comparison.csv` across all runs), the figures and summary tables in `results/figures/`
-and `results/results_summary.md`, and the write-up in `report/report_draft.md`.
+and `results/results_summary.md`, and the write-up in `report/report.md`.
 
 Raw PDFs, vector indexes, and the virtualenv are not tracked. Rebuild the corpus with
 `python -m src.data_processing.download_pdfs`; indexes are rebuilt from the chunks by the sweep.
