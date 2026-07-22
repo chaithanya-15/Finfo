@@ -26,7 +26,7 @@ project/
 │   ├── results_summary.md    # tables generated from the sweep
 │   └── figures/
 └── report/
-    └── template.md           # skeleton for the final report
+    └── report.md             # the experiment write-up
 ```
 
 ## Setup
@@ -102,10 +102,12 @@ FinanceBench's document manifest lists 360 filings, but 78 of the source URLs ar
 they return timeouts, 404s or 403s from the companies' investor-relations hosts. The links
 are broken at the source, so re-running the download does not recover them.
 
-So **32 of the 150 evaluation questions ask about a document that cannot be retrieved**. `run_experiments.py` therefore reports every metric twice, over
-all 150 questions and over the 118 answerable ones. The first number describes the system
-as deployed against this corpus; the second isolates retrieval and generation quality from
-the missing data.
+A further set of downloaded files are corrupt or empty, so text extraction succeeds for 263
+documents. **36 of the 150 evaluation questions ask about a document that cannot be answered
+from the local corpus.** `run_experiments.py` therefore reports every metric twice, over all
+150 questions and over the 114 answerable ones. The first number describes the system as
+deployed against this corpus; the second isolates retrieval and generation quality from the
+missing data.
 
 ## Configuration
 
@@ -115,8 +117,8 @@ Experiment configurations are stored in the `configs/` directory as YAML files. 
 
 The evaluation pipeline computes:
 - Retrieval metrics (Recall@k, Precision@k, MRR)
-- Generation metrics (lexical/semantic overlap, LLM-as-judge scores)
-- Citation validation metrics
+- Generation metrics (ROUGE-L, embedding-based semantic similarity, exact match)
+- Citation validation metrics (precision, recall, F1)
 - Error analysis by question type
 
 ## Results and report
@@ -131,7 +133,7 @@ Raw PDFs, vector indexes, and the virtualenv are not tracked. Rebuild the corpus
 ## Implementation Notes
 
 This implementation follows all constraints from the project brief:
-- Uses only free, locally executable models (via uv and Python 3.14)
+- Uses only free, locally executable models (via uv and Python 3.12)
 - Requires citations in generated answers
 - Uses only the provided corpus for answers
 - Compares multiple configurations (ablation study)
