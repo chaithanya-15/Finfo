@@ -1,33 +1,32 @@
 # Results summary
 
-Generated from `results/experiments/`. Every metric is shown for the answerable
-subset (114 questions whose source document yields usable text) and, where
-noted, for all 150 questions.
+Generated from `results/experiments/`. Metrics are on the 114-question
+answerable subset (documents that yield usable text); the full set is 150.
 
-## Retrieval across configurations (answerable subset)
+## Retrieval (answerable subset)
 
-| experiment | axis | answerable.recall@1_mean | answerable.recall@5_mean | answerable.recall@10_mean | answerable.mrr_mean |
+| config | axis | R@1 | R@5 | R@10 | MRR |
 | --- | --- | --- | --- | --- | --- |
-| baseline | reference | 0.232 | 0.456 | 0.456 | 0.323 |
-| chunk_256 | chunk_size | 0.161 | 0.282 | 0.282 | 0.203 |
 | chunk_structure | chunk_size | 0.244 | 0.475 | 0.475 | 0.333 |
-| embed_minilm | embedding_model | 0.149 | 0.395 | 0.395 | 0.243 |
+| baseline | reference | 0.232 | 0.456 | 0.456 | 0.323 |
 | gen_gemma | generation_model | 0.232 | 0.456 | 0.456 | 0.323 |
 | k_10 | retrieval_k | 0.232 | 0.456 | 0.504 | 0.329 |
 | k_3 | retrieval_k | 0.232 | 0.409 | 0.409 | 0.311 |
+| embed_minilm | embedding_model | 0.149 | 0.395 | 0.395 | 0.243 |
+| chunk_256 | chunk_size | 0.161 | 0.282 | 0.282 | 0.203 |
 
 ## Generation and citations (answerable subset)
 
-| experiment | generation_model | answerable.rouge_l_mean | answerable.semantic_similarity_mean | answerable.citation_f1_mean | abstained |
+| config | model | ROUGE-L | semantic | cit F1 | abstained |
 | --- | --- | --- | --- | --- | --- |
 | baseline | Qwen3.5-4B | 0.100 | 0.329 | 0.080 | 99.000 |
 | chunk_256 | Qwen3.5-4B | 0.101 | 0.306 | 0.113 | 101.000 |
 | chunk_structure | Qwen3.5-4B | 0.102 | 0.321 | 0.070 | 102.000 |
 | gen_gemma | gemma-4-12B | 0.096 | 0.253 | 0.077 | 112.000 |
 
-## Answerable vs all (retrieval Recall@5)
+## Answerable versus all, Recall@5
 
-| experiment | all.recall@5_mean | answerable.recall@5_mean |
+| config | R@5 (all 150) | R@5 (answerable) |
 | --- | --- | --- |
 | baseline | 0.360 | 0.456 |
 | chunk_256 | 0.214 | 0.282 |
@@ -37,7 +36,7 @@ noted, for all 150 questions.
 | k_10 | 0.360 | 0.456 |
 | k_3 | 0.324 | 0.409 |
 
-## Baseline (baseline) by question type (answerable)
+## Reference run by question type (answerable)
 
 | question_type     |   recall@5 |   mrr |   rouge_l |   semantic_similarity |   citation_f1 |
 |:------------------|-----------:|------:|----------:|----------------------:|--------------:|
