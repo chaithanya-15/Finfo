@@ -19,12 +19,15 @@ logger = logging.getLogger(__name__)
 # configs/*.yaml so an experiment can switch generator without touching code.
 LOCAL_MODEL_PATTERNS = {
     "Qwen3.5-4B": "models--unsloth--Qwen3.5-4B-GGUF/snapshots/*/Qwen3.5-4B-UD-Q4_K_XL.gguf",
+    # gemma-4-12B has a standard (non-nested) architecture, so unlike gemma-4-E2B it runs on
+    # the Metal backend without crashing on the first decode. Resolved from the Hugging Face
+    # cache after `huggingface-cli download lmstudio-community/gemma-4-12B-it-GGUF`.
+    "gemma-4-12B": "models--lmstudio-community--gemma-4-12B-it-GGUF/snapshots/*/gemma-4-12B-it-Q8_0.gguf",
     "gemma-4-E2B": "models--unsloth--gemma-4-E2B-it-GGUF/snapshots/*/gemma-4-E2B-it-UD-Q4_K_XL.gguf",
 }
 
-# Weights kept in the LM Studio models directory rather than the Hugging Face cache.
-# gemma-4-12B has a standard (non-nested) architecture, so unlike gemma-4-E2B it runs on the
-# Metal backend without crashing on the first decode.
+# The same weights, when present in a local LM Studio install, are found here first so an
+# existing download is reused rather than fetched again.
 LMSTUDIO_MODEL_PATTERNS = {
     "gemma-4-12B": "lmstudio-community/gemma-4-12B-it-GGUF/gemma-4-12B-it-Q8_0.gguf",
 }
@@ -60,26 +63,28 @@ def resolve_model_path(model_name: str, cache_dir: Optional[str] = None) -> str:
     if cache_dir is None:
         cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
 
-    if model_name in LMSTUDIO_MODEL_PATTERNS:
-        root = os.path.expanduser("~/.lmstudio/models")
-        pattern = LMSTUDIO_MODEL_PATTERNS[model_name]
-    else:
-        root = cache_dir
-        pattern = LOCAL_MODEL_PATTERNS.get(model_name)
-
-    if pattern is None:
-        known = sorted(list(LOCAL_MODEL_PATTERNS) + list(LMSTUDIO_MODEL_PATTERNS))
+    known = sorted(set(LOCAL_MODEL_PATTERNS) | set(LMSTUDIO_MODEL_PATTERNS))
+    if model_name not in known:
         raise FileNotFoundError(
             f"Unknown model '{model_name}'. Known names: {known}. "
             "Pass a path to a .gguf file to use something else."
         )
 
-    matches = glob.glob(os.path.join(root, pattern))
-    if not matches:
-        raise FileNotFoundError(
-            f"No local weights for '{model_name}'. Expected to find {pattern} under {root}."
-        )
-    return matches[0]
+    # Try an existing LM Studio download first, then the Hugging Face cache. Listing both
+    # keeps the resolver portable: a machine with only the HF download still finds the file.
+    search = []
+    if model_name in LMSTUDIO_MODEL_PATTERNS:
+        search.append((os.path.expanduser("~/.lmstudio/models"), LMSTUDIO_MODEL_PATTERNS[model_name]))
+    if model_name in LOCAL_MODEL_PATTERNS:
+        search.append((cache_dir, LOCAL_MODEL_PATTERNS[model_name]))
+
+    for root, pattern in search:
+        matches = glob.glob(os.path.join(root, pattern))
+        if matches:
+            return matches[0]
+
+    tried = "; ".join(os.path.join(r, p) for r, p in search)
+    raise FileNotFoundError(f"No local weights for '{model_name}'. Looked for: {tried}")
 
 
 def citation_key(context: Dict[str, Any]) -> str:
