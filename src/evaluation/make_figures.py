@@ -196,11 +196,14 @@ def main():
 
     plot_error_by_type(root, args.baseline, fig_dir / "baseline_by_type.png")
 
-    # Written results summary.
+    # Written results summary. The answerable count is read from the runs rather than
+    # hardcoded, so it stays correct if the corpus or the answerable rule changes.
+    n_ans = int(df["n_answerable"].max()) if "n_answerable" in df.columns else 0
+    n_all = int(df["n_all"].max()) if "n_all" in df.columns else 0
     lines = ["# Results summary", "",
              "Generated from `results/experiments/`. Every metric is shown for the answerable",
-             "subset (118 questions with a retrievable source document) and, where noted, for",
-             "all 150 questions.", ""]
+             f"subset ({n_ans} questions whose source document yields usable text) and, where",
+             f"noted, for all {n_all} questions.", ""]
 
     lines += ["## Retrieval across configurations (answerable subset)", ""]
     retr_cols = ["experiment", "axis", "answerable.recall@1_mean", "answerable.recall@5_mean",
