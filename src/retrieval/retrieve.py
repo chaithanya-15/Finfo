@@ -38,10 +38,19 @@ class EmbeddingManager:
         self._load_model()
 
     def _load_model(self):
-        """Load the sentence transformer model."""
+        """Load the sentence transformer model, preferring the Apple GPU when present."""
         try:
-            self.model = SentenceTransformer(self.model_name)
-            logger.info(f"Loaded embedding model: {self.model_name}")
+            device = None
+            try:
+                import torch
+                if torch.backends.mps.is_available():
+                    device = "mps"
+                elif torch.cuda.is_available():
+                    device = "cuda"
+            except Exception:
+                device = None
+            self.model = SentenceTransformer(self.model_name, device=device)
+            logger.info(f"Loaded embedding model: {self.model_name} on {self.model.device}")
         except Exception as e:
             logger.error(f"Failed to load model {self.model_name}: {e}")
             raise
@@ -472,9 +481,11 @@ def load_index(index_name: str = "financebench_index",
         Loaded VectorStore instance
     """
     logger.info(f"Loading {store_type} index from {index_name}...")
-    vector_store = create_vector_store(store_type=store_type)
 
     if store_type.lower() == "faiss":
+        # The real dimension comes from the index file that load() reads, so the value
+        # passed here is only a placeholder to satisfy the constructor.
+        vector_store = create_vector_store(store_type=store_type, dimension=1)
         vector_store.load(index_name)
     elif store_type.lower() == "chroma":
         # For Chroma, we just need to initialize with the same parameters
@@ -487,6 +498,24 @@ def load_index(index_name: str = "financebench_index",
         raise ValueError(f"Unsupported store type: {store_type}")
 
     return vector_store
+
+
+_EMBEDDER_CACHE: Dict[str, "EmbeddingManager"] = {}
+
+
+def _get_cached_embedder(embedding_model: str) -> "EmbeddingManager":
+    """
+    Return a shared EmbeddingManager for a model name, creating it once.
+
+    Args:
+        embedding_model: sentence-transformers model name
+
+    Returns:
+        A cached EmbeddingManager
+    """
+    if embedding_model not in _EMBEDDER_CACHE:
+        _EMBEDDER_CACHE[embedding_model] = EmbeddingManager(model_name=embedding_model)
+    return _EMBEDDER_CACHE[embedding_model]
 
 
 def search_index(vector_store: VectorStore, query: str,
@@ -504,8 +533,9 @@ def search_index(vector_store: VectorStore, query: str,
     Returns:
         List of search result dictionaries
     """
-    # Initialize embedding model (same as used for indexing)
-    embedder = EmbeddingManager(model_name=embedding_model)
+    # Reuse one embedder per model. Loading the model costs tens of seconds, so building a
+    # fresh one for every query would dominate a sweep over the whole question set.
+    embedder = _get_cached_embedder(embedding_model)
 
     # Encode query
     query_vector = embedder.encode_query(query)
