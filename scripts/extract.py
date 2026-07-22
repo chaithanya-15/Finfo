@@ -1,5 +1,7 @@
 import json, time, sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.data_processing.ingest import extract_document_text
 
 docs = {json.loads(l)["doc_name"]: 1 for l in open("data/financebench_document_information.jsonl")}

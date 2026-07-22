@@ -8,6 +8,8 @@ This project implements a Retrieval-Augmented Generation (RAG) system for the Fi
 project/
 ├── README.md                 # setup + how to reproduce experiments
 ├── requirements.txt
+├── run_experiments.py        # ablation sweep entry point
+├── run_pipeline.py           # single-configuration pipeline runner
 ├── data/
 │   ├── raw_pdfs/             # downloaded PDF files
 │   └── processed_chunks/     # processed and chunked text
@@ -15,7 +17,9 @@ project/
 │   ├── data_processing/      # PDF download, text extraction, cleaning, chunking
 │   ├── retrieval/            # embedding, indexing, search
 │   ├── generation/           # LLM loading, prompting, answer generation
-│   └── evaluation/           # metrics calculation, evaluation pipeline
+│   └── evaluation/           # metrics, evaluation pipeline, figure generation
+├── scripts/                  # helpers: prebuild_indexes, extract, reconcile, setup checks
+├── tests/                    # pytest unit tests
 ├── configs/                  # YAML config files for experiments
 ├── results/                  # experiment results
 │   ├── experiments/          # per-configuration metrics + comparison.csv
