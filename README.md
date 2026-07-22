@@ -119,15 +119,14 @@ The evaluation pipeline computes:
 - Citation validation metrics
 - Error analysis by question type
 
-## Current status
+## Results and report
 
-The pipeline does not run end to end yet. `src/generation/` is empty, so nothing loads the
-model named under `generation:` in `configs/base_config.yaml` and `run_pipeline.py` cannot
-produce answers. `data/processed_chunks/` and `results/` are empty for the same reason: no
-full run has happened.
+The full ablation has been run. Per-configuration metrics are in `results/experiments/`
+(with `comparison.csv` across all runs), the figures and summary tables in `results/figures/`
+and `results/results_summary.md`, and the write-up in `report/report_draft.md`.
 
-Raw PDFs and the virtualenv are not tracked here. Rebuild the corpus with
-`python -m src.data_processing.download_pdfs`.
+Raw PDFs, vector indexes, and the virtualenv are not tracked. Rebuild the corpus with
+`python -m src.data_processing.download_pdfs`; indexes are rebuilt from the chunks by the sweep.
 
 ## Implementation Notes
 
