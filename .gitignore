@@ -10,11 +10,16 @@ data/extracted_text/
 indexes/
 *_chroma_db/
 
-# experiment outputs
+# experiment outputs: keep the report-facing summaries, drop the bulky per-question dumps
 results/*
 !results/.gitkeep
+!results/results_summary.md
 !results/figures/
 !results/figures/.gitkeep
+!results/figures/*.png
+!results/experiments/
+results/experiments/*
+!results/experiments/comparison.csv
 
 # python
 __pycache__/
