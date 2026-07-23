@@ -37,7 +37,7 @@ def example_retrieval_setup():
     # Check if we have any processed chunks
     chunks_dir = "data/processed_chunks"
     if os.path.exists(chunks_dir):
-        from retrieve import load_chunks_from_directory, build_index
+        from retrieval.retrieve import load_chunks_from_directory, build_index, search_index
 
         print(f"Loading chunks from {chunks_dir}...")
         chunks = load_chunks_from_directory(chunks_dir)
@@ -80,7 +80,7 @@ def example_generation_setup():
     print("=== Generation Setup Example ===")
 
     try:
-        from generate import create_qa_pipeline, FinancialQAModel
+        from generation.generate import create_qa_pipeline, FinancialQAModel
 
         print("Creating QA pipeline (this would download the model)...")
         # Note: This would actually download and load a large model
@@ -107,7 +107,7 @@ def example_evaluation():
     """Example of setting up evaluation."""
     print("=== Evaluation Setup Example ===")
 
-    from evaluate import RAGEvaluator
+    from evaluation.evaluate import RAGEvaluator
 
     evaluator = RAGEvaluator()
     print("Evaluator created")
