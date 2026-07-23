@@ -69,8 +69,10 @@ experiments:
 
   - name: filtered_meta
     axis: retrieval_filter
+    # Generates so the filter can be separated from the cross-encoder: rerank_filtered changes
+    # both at once, and without this arm a gain cannot be attributed to either one.
     note: reference retrieval, restricted to the company named in the question
-    generate: false
+    generate: true
     metadata_filter: true
     overrides: {}
 
@@ -79,4 +81,35 @@ experiments:
     note: reference retrieval fused with BM25 lexical search (RRF)
     generate: false
     hybrid: true
+    overrides: {}
+
+  - name: prompt_derive
+    axis: prompting
+    # Reference retrieval, so the prompt is the only variable against baseline. The model
+    # abstains on 30% of questions whose evidence was retrieved, which is what this targets.
+    note: reference retrieval, prompt permits deriving figures and showing arithmetic
+    generate: true
+    prompt: derive
+    overrides: {}
+
+  - name: rerank
+    axis: reranking
+    note: dense pool of 50 reordered by a bge-reranker-base cross-encoder
+    generate: false
+    rerank: true
+    pool: 50
+    overrides: {}
+
+  - name: rerank_filtered
+    axis: reranking
+    # Recall@50 is 0.80 under the company filter against 0.51 at k=5, so the filter decides
+    # what the cross-encoder is allowed to see and the two compose rather than compete.
+    # Generates, so it can be read against the baseline end to end: reranking lifts the
+    # gold-document hit rate far more than it lifts the span-overlap metric, and answer
+    # quality is the thing that settles whether that matters.
+    note: company-filtered pool of 50 reordered by the same cross-encoder
+    generate: true
+    rerank: true
+    metadata_filter: true
+    pool: 50
     overrides: {}
