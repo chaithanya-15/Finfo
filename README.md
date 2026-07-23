@@ -12,6 +12,7 @@ project/
 ├── requirements.txt
 ├── run_experiments.py        # ablation sweep entry point
 ├── run_pipeline.py           # single-configuration pipeline runner
+├── app.py                    # optional Gradio demo
 ├── data/
 │   ├── raw_pdfs/             # downloaded PDF files
 │   └── processed_chunks/     # processed and chunked text
