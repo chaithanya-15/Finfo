@@ -50,6 +50,41 @@ def json_safe(obj: Any) -> Any:
     return obj
 
 
+# Refusals in the model's own words, not just the wording it was told to use. Instructed to
+# reply "Not enough information in the provided context", it often declines some other way
+# ("The provided excerpts do not contain specific figures for..."). Matching only the exact
+# string undercounts refusals, which made a prompt change look like it had reduced abstention
+# when it had only rephrased it.
+_REFUSAL_PATTERN = re.compile(
+    r"not enough information"
+    r"|do(?:es)? not (?:contain|provide|specify|include|state|identify|disclose)"
+    r"|no (?:specific )?(?:information|figures?|data|mention|details)"
+    r"|not (?:stated|provided|specified|available|disclosed|mentioned) (?:in|within|by)"
+    r"|cannot (?:be )?(?:determined|calculated|answered?)",
+    re.IGNORECASE,
+)
+
+
+def is_refusal(answer: str) -> bool:
+    """
+    Whether an answer declines to answer, however it is worded.
+
+    Only the opening sentence is examined. A refusal is how an answer starts; the same wording
+    later in a reply is usually a caveat attached to a real answer ("Revenue was $5,412 million
+    [X_c12]. The excerpts do not contain the FY2019 comparison."), which should not count.
+
+    Args:
+        answer: Generated answer text
+
+    Returns:
+        True if the answer opens by declining
+    """
+    if not answer:
+        return False
+    opening = re.split(r'(?<=[.!?])\s', str(answer).strip(), maxsplit=1)[0]
+    return bool(_REFUSAL_PATTERN.search(opening))
+
+
 _EVIDENCE_STOPWORDS = set(
     "the a an and or but in on at to for of with by is are was were be as from that this it "
     "its their his her our your they we you i he she has have had will would can could".split()
@@ -412,10 +447,14 @@ class CitationEvaluator:
             if text and len(text) > 10:  # Only consider substantial text chunks
                 # Check if any significant portion of the chunk appears in answer
                 # Simple approach: check if some keywords from chunk are in answer
-                words = set(text.split())
-                # Filter out very common words
+                # Keep the chunk's own word order and drop repeats. Building the list from a
+                # set instead made this metric non-deterministic: Python randomises string
+                # hashing per process, so "the first five keywords" was a different five on
+                # every run and the same answer scored differently each time. That drift was
+                # previously mistaken for the llama.cpp Metal backend being irreproducible.
                 stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
-                keywords = [w for w in words if len(w) > 3 and w not in stop_words]
+                keywords = [w for w in dict.fromkeys(text.split())
+                            if len(w) > 3 and w not in stop_words]
 
                 if keywords:
                     # Check if at least some keywords appear in answer
@@ -521,16 +560,9 @@ class RAGEvaluator:
             answer, retrieved_chunks
         )
 
-        # Flag an abstention. The generator is instructed to reply exactly "Not enough
-        # information in the provided context"; the extra phrases catch close variants.
-        refusal_phrases = [
-            "not enough information in the provided context",
-            "not enough information",
-            "cannot answer",
-        ]
-        metrics["has_refusal"] = any(
-            phrase in answer.lower() for phrase in refusal_phrases
-        )
+        # Flag an abstention, counting refusals phrased in the model's own words as well as the
+        # exact string it was told to use. See is_refusal.
+        metrics["has_refusal"] = is_refusal(answer)
 
         return metrics
 
