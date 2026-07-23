@@ -66,3 +66,10 @@ experiments:
         # standard architecture runs on the Metal GPU, unlike gemma-4-E2B whose nested
         # design segfaults llama.cpp's Metal backend on the first decode.
         model_name: "gemma-4-12B"
+
+  - name: filtered_meta
+    axis: retrieval_filter
+    note: reference retrieval, restricted to the company named in the question
+    generate: false
+    metadata_filter: true
+    overrides: {}

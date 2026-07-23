@@ -239,11 +239,14 @@ def run_one(exp: Dict[str, Any], base: Dict[str, Any], qa: Dict[str, Any],
     store = get_index(strategy, config, index_cache)
 
     logger.info(f"Retrieving top-{k} for {len(qa['questions'])} questions")
-    retrieved = [
-        search_index(vector_store=store, query=q,
-                     embedding_model=config["retrieval"]["embedding_model"], k=k)
-        for q in qa["questions"]
-    ]
+    emb = config["retrieval"]["embedding_model"]
+    if exp.get("metadata_filter"):
+        from src.retrieval.metadata_filter import load_company_list, filtered_search
+        companies = load_company_list("data/financebench_document_information.jsonl")
+        retrieved = [filtered_search(store, q, emb, k, companies) for q in qa["questions"]]
+    else:
+        retrieved = [search_index(vector_store=store, query=q, embedding_model=emb, k=k)
+                     for q in qa["questions"]]
 
     generated = None
     gen_stats = {}
