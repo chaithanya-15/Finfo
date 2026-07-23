@@ -36,7 +36,8 @@ VERMILLION = "#D55E00"  # contrast / "miss"
 SKY = "#56B4E9"       # fourth category
 PURPLE = "#CC79A7"    # fifth category
 AXIS_COLOR = {"chunk_size": ORANGE, "embedding_model": GREEN,
-              "retrieval_k": SKY, "generation_model": PURPLE, "reference": BLUE}
+              "retrieval_k": SKY, "generation_model": PURPLE, "reference": BLUE,
+              "retrieval_filter": VERMILLION}
 
 RETRIEVAL_METRICS = ["recall@1", "recall@5", "recall@10", "mrr"]
 
@@ -120,11 +121,13 @@ def fig_retrieval_ablation(df: pd.DataFrame, fig_dir: Path):
     One panel carries the whole retrieval story: which single change helps or hurts, with the
     reference configuration marked as the point of comparison.
     """
-    order = ["chunk_256", "baseline", "chunk_structure", "embed_minilm", "k_3", "k_10"]
+    order = ["chunk_256", "embed_minilm", "k_3", "baseline", "k_10", "chunk_structure",
+             "hybrid", "filtered_meta"]
     sub = df.set_index("experiment").reindex([o for o in order if o in df["experiment"].values])
     labels = {"chunk_256": "256-tok chunks", "baseline": "512-tok (reference)",
               "chunk_structure": "structure-aware", "embed_minilm": "MiniLM embed",
-              "k_3": "k=3", "k_10": "k=10"}
+              "k_3": "k=3", "k_10": "k=10", "filtered_meta": "company filter",
+              "hybrid": "dense+BM25"}
     vals = sub["answerable.recall@5_mean"].values
     colors = [AXIS_COLOR.get(a, BLUE) for a in sub["axis"].values]
 
@@ -141,14 +144,14 @@ def fig_retrieval_ablation(df: pd.DataFrame, fig_dir: Path):
     ax.set_xticklabels([labels.get(i, i) for i in sub.index], rotation=18, ha="right")
     ax.set_ylabel("Recall@5 (answerable)")
     ax.set_ylim(0, max(vals) * 1.28)
-    ax.set_title("Retrieval: structure-aware chunks and bge-base embeddings win")
+    ax.set_title("Retrieval: filtering to the questioned company beats every chunking or k change")
     ax.grid(axis="x", visible=False)
     _despine(ax)
     # legend by axis, placed over the short leftmost bar to avoid the taller bars' labels
     from matplotlib.patches import Patch
     seen = dict(zip(sub["axis"], colors))
     legend = [Patch(facecolor=AXIS_COLOR[a], label=a.replace("_", " "))
-              for a in ["reference", "chunk_size", "embedding_model", "retrieval_k"] if a in seen]
+              for a in ["reference", "chunk_size", "embedding_model", "retrieval_k", "retrieval_filter"] if a in seen]
     ax.legend(handles=legend, loc="upper left", frameon=False, fontsize=9.5, ncol=2)
     fig.tight_layout()
     fig.savefig(fig_dir / "retrieval_ablation.png", bbox_inches="tight")
