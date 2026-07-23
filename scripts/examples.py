@@ -87,7 +87,7 @@ def example_generation_setup():
         # For demonstration, we'll just show how it would be used
 
         # qa_model = create_qa_pipeline(
-        #     model_name="meta-llama/Llama-3.1-8B-Instruct",
+        #     model_name="Qwen3.5-4B",
         #     device="auto",
         #     load_in_4bit=True
         # )
