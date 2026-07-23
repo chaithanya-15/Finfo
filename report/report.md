@@ -335,9 +335,11 @@ tuned.
 Generation uses small 4-bit models so the pipeline runs locally and for free, so absolute
 answer quality trails a larger hosted model, especially on arithmetic over a table. Because the
 models refuse when the passages do not support an answer, most error surfaces as abstention, the
-safer failure here but still a ceiling on how many questions get answered. Configuration
-comparisons stay valid because every run uses the same models and a fixed decoding seed, though
-we did not average over seeds, so small differences should be read with care. Finally,
+safer failure here but still a ceiling on how many questions get answered. We set a fixed
+decoding seed, but the llama.cpp Metal backend is not bit-reproducible, so re-running a
+configuration shifts the generation metrics by a small amount (the citation and ROUGE scores
+move by up to about 0.02, retrieval is unaffected). We report a single run and did not average
+over seeds, so small differences between close configurations should be read with care. Finally,
 pdfplumber recovers table text but flattens its row and column structure, one likely reason
 table-heavy numerical questions are hardest.
 
