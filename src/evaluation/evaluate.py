@@ -306,6 +306,87 @@ class GenerationEvaluator:
             logger.error(f"Error calculating semantic similarity: {e}")
             return 0.0
 
+    @staticmethod
+    def _figures(text: str) -> List[float]:
+        """
+        Comparable numeric values in free text, handling $ , % ( ) and negatives.
+
+        Citation tags are stripped first, and a figure whose digits touch a letter is skipped so
+        that 3M, 10K, FY2016 and c367 are not read as quantities. The letter test anchors on the
+        first digit because the pattern may absorb a leading "$", "(" or space.
+
+        Args:
+            text: Any answer or reference string
+
+        Returns:
+            The figures found, in order of appearance
+        """
+        text = re.sub(r'\[[^\]]*\]', ' ', str(text))
+        out = []
+        for m in re.finditer(r'[-+]?\$?\s?\(?\d[\d,]*\.?\d*\)?%?', text):
+            raw = m.group()
+            first_digit = next((i for i, ch in enumerate(raw) if ch.isdigit()), None)
+            if first_digit is None:
+                continue
+            d = m.start() + first_digit
+            before = text[d - 1] if d > 0 else " "
+            after = text[m.end()] if m.end() < len(text) else " "
+            if before.isalpha() or after.isalpha():
+                continue
+            neg = "(" in raw or raw.lstrip().startswith("-")
+            s = re.sub(r'[^\d.]', '', raw).strip('.')
+            if not s:
+                continue
+            try:
+                value = float(s)
+            except ValueError:
+                continue
+            out.append(-value if neg else value)
+        return out
+
+    def calculate_numeric_agreement(self, generated_text: str, reference_text: str,
+                                    rel_tol: float = 0.005) -> Optional[float]:
+        """
+        Whether a figure from the reference answer appears in the generated answer.
+
+        ROUGE-L cannot score these questions: FinanceBench answers are frequently bare figures
+        such as "$1577.00", so a correct answer written as a sentence scores near zero on word
+        overlap. This compares the figures instead.
+
+        Fiscal years are dropped from both sides, since nearly every question and answer names
+        one and leaving them in matches "FY2023" against "FY2023" and scores a wrong answer as
+        correct. The tolerance is tight for the same reason: a loose one lets the 31 in
+        "December 31" match a reference value of 30.8. A 1000x difference is accepted, because
+        filings quote millions and answers sometimes restate in billions.
+
+        Args:
+            generated_text: Generated answer text
+            reference_text: Ground truth answer text
+            rel_tol: Relative tolerance for a match
+
+        Returns:
+            1.0 on agreement, 0.0 on disagreement, or None when the reference answer carries no
+            figure and the question is therefore not scorable this way
+        """
+        def not_year(v):
+            return not (float(v).is_integer() and 1900 <= v <= 2100)
+
+        gold = [v for v in self._figures(reference_text) if not_year(v)]
+        gen = [v for v in self._figures(generated_text) if not_year(v)]
+        if not gold:
+            return None
+        if not gen:
+            return 0.0
+        for a in gold:
+            for b in gen:
+                denom = max(abs(a), 1e-9)
+                if a == b or abs(a - b) / denom <= rel_tol:
+                    return 1.0
+                for scale in (1000.0, 0.001, 1e6, 1e-6):
+                    if abs(a - b * scale) / denom <= rel_tol:
+                        return 1.0
+        return 0.0
+
     def calculate_exact_match(self, generated_text: str,
                               reference_text: str) -> float:
         """
@@ -537,6 +618,11 @@ class RAGEvaluator:
             answer, ground_truth_answer
         )
         metrics["exact_match"] = self.generation_evaluator.calculate_exact_match(
+            answer, ground_truth_answer
+        )
+        # None on questions whose reference answer holds no figure, so they are excluded from the
+        # mean rather than counted as failures.
+        metrics["numeric_agreement"] = self.generation_evaluator.calculate_numeric_agreement(
             answer, ground_truth_answer
         )
 

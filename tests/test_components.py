@@ -109,6 +109,41 @@ class TestEvaluationMetrics(unittest.TestCase):
         # No match
         self.assertEqual(evaluator.calculate_exact_match("Hello", "World"), 0.0)
 
+    def test_numeric_agreement(self):
+        """Test numeric agreement, which scores figures rather than wording."""
+        from evaluation.evaluate import GenerationEvaluator
+
+        evaluator = GenerationEvaluator()
+        agree = evaluator.calculate_numeric_agreement
+
+        # The figure is right even though almost no wording is shared.
+        self.assertEqual(agree("$59,268 million [COSTCO_2021_10K_c51]", "$59268.00"), 1.0)
+        self.assertEqual(agree("Total was 16,525 million", "$16525.00"), 1.0)
+        # Filings quote millions, answers sometimes restate in billions.
+        self.assertEqual(agree("about 1.577 billion", "$1577.00"), 1.0)
+
+        self.assertEqual(agree("$1,493 million", "$1577.00"), 0.0)
+        self.assertEqual(agree("Not enough information in the provided context.", "$1577.00"), 0.0)
+
+        # A shared fiscal year is not agreement, and nor is a digit inside an identifier
+        # such as 3M or a citation tag.
+        self.assertEqual(agree("Revenue rose in FY2023 [3M_2023_10K_c4]", "Flat in FY2023"), None)
+        self.assertEqual(agree("3M reported growth", "The answer is 3.0"), 0.0)
+
+        # Reference answers carrying no figure are not scorable this way.
+        self.assertIsNone(agree("Yes, margins were stable", "Yes, margins were stable"))
+
+    def test_refusal_detection(self):
+        """Test that refusals count however the model words them."""
+        from evaluation.evaluate import is_refusal
+
+        self.assertTrue(is_refusal("Not enough information in the provided context."))
+        self.assertTrue(is_refusal("The excerpts do not contain the FY2018 figure."))
+        self.assertFalse(is_refusal("$16,525 million [NIKE_2019_10K_c97]"))
+        # An answer followed by a caveat is still an answer.
+        self.assertFalse(is_refusal(
+            "Revenue was $5,412 million [X_c12]. The excerpts do not contain the FY2019 figure."))
+
     def test_citation_functions(self):
         """Test citation evaluation functions."""
         from evaluation.evaluate import CitationEvaluator
