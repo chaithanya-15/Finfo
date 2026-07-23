@@ -101,7 +101,7 @@ def run_generation_setup(config: Dict[str, Any]) -> FinancialQAModel:
     """Step 4: Set up generation model."""
     logger.info("=== Step 4: Generation Setup ===")
 
-    model_name = config.get("generation", {}).get("model_name", "meta-llama/Llama-3.1-8B-Instruct")
+    model_name = config.get("generation", {}).get("model_name", "Qwen3.5-4B")
     device = config.get("generation", {}).get("device", "auto")
     load_in_4bit = config.get("generation", {}).get("load_in_4bit", True)
 
@@ -255,7 +255,7 @@ def main():
                 "chunks_dir": "data/processed_chunks"
             },
             "generation": {
-                "model_name": "meta-llama/Llama-3.1-8B-Instruct",
+                "model_name": "Qwen3.5-4B",
                 "device": "auto",
                 "load_in_4bit": True,
                 "generation_kwargs": {
