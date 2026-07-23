@@ -7,6 +7,8 @@ This project implements a Retrieval-Augmented Generation (RAG) system for the Fi
 ```
 project/
 ├── README.md                 # setup + how to reproduce experiments
+├── EXAMPLE_USAGE.md          # runnable Python API examples
+├── quick_start.sh            # end-to-end smoke run on a small subset
 ├── requirements.txt
 ├── run_experiments.py        # ablation sweep entry point
 ├── run_pipeline.py           # single-configuration pipeline runner
