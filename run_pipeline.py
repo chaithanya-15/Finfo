@@ -70,10 +70,15 @@ def run_retrieval_setup(config: Dict[str, Any]):
     """Step 3: Set up retrieval system (embeddings, indexing)."""
     logger.info("=== Step 3: Retrieval Setup ===")
 
-    # Load processed chunks
+    # Load processed chunks, keeping only the configured chunk strategy so a single-config run
+    # indexes one granularity rather than all strategies mixed together.
     from retrieval.retrieve import load_chunks_from_directory
     chunks_dir = config.get("retrieval", {}).get("chunks_dir", "data/processed_chunks")
     chunks = load_chunks_from_directory(chunks_dir)
+
+    strategies = config.get("corpus_processing", {}).get("chunk_strategies")
+    if strategies:
+        chunks = [c for c in chunks if c.get("chunk_strategy") in strategies]
 
     if not chunks:
         logger.warning("No chunks found. Please run corpus processing first.")
