@@ -16,11 +16,11 @@ def check_python_version():
     version = sys.version
     print(f"Python {version}")
     version_info = sys.version_info
-    if version_info.major == 3 and version_info.minor >= 14:
-        print("✓ Python version OK (3.14+)")
+    if version_info.major == 3 and version_info.minor >= 12:
+        print("✓ Python version OK (3.12+)")
         return True
     else:
-        print("✗ Python 3.14+ required")
+        print("✗ Python 3.12+ required")
         return False
 
 def check_packages(required_packages):
@@ -49,16 +49,15 @@ def check_gpu():
     try:
         import torch
         if torch.cuda.is_available():
-            gpu_count = torch.cuda.device_count()
-            gpu_name = torch.cuda.get_device_name(0)
-            print(f"✓ CUDA available: {gpu_count} GPU(s)")
-            print(f"  GPU 0: {gpu_name}")
+            print(f"✓ CUDA available: {torch.cuda.get_device_name(0)}")
             return True
-        else:
-            print("⚠ CUDA not available (CPU-only mode)")
-            return False
+        if torch.backends.mps.is_available():
+            print("✓ Apple Metal (MPS) available")
+            return True
+        print("⚠ No GPU available (CPU-only mode)")
+        return False
     except ImportError:
-        print("⚠ PyTorch not installed - cannot check GPU")
+        print("⚠ PyTorch not installed, cannot check GPU")
         return False
 
 def check_disk_space(path="."):
@@ -178,12 +177,10 @@ def main():
     checks = [
         check_python_version,
         lambda: check_packages([
-            "torch", "transformers", "sentence_transformers",
-            "faiss_cpu", "chromadb", "langchain", "llama_index",
-            "pandas", "numpy", "scikit-learn", "rouge_score",
-            "rapidfuzz", "tqdm", "pyyaml", "matplotlib", "seaborn",
-            "pypdf", "pdfplumber", "unstructured", "bitsandbytes",
-            "accelerate", "datasets", "ragas"
+            "torch", "sentence_transformers", "faiss", "chromadb",
+            "llama_cpp", "pandas", "numpy", "yaml", "sklearn",
+            "rouge_score", "rapidfuzz", "matplotlib", "seaborn",
+            "pypdf", "pdfplumber", "tiktoken"
         ]),
         check_gpu,
         check_disk_space,
@@ -206,7 +203,7 @@ def main():
     print(f"Results: {passed}/{total} checks passed")
 
     if passed == total:
-        print("🎉 All checks passed! The environment is ready.")
+        print("All checks passed. The environment is ready.")
         return 0
     else:
         print("⚠ Some checks failed. Please address the issues above.")

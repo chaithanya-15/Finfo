@@ -247,9 +247,8 @@ def chunk_text_fixed_size(text: str, chunk_size: int = 512,
         chunk_text = encoding.decode(chunk_tokens)
         chunks.append(chunk_text)
 
-        # Stop once the final chunk has reached the end. Advancing by chunk_size - overlap
-        # otherwise leaves start stuck at len(tokens) - overlap, which never satisfies a
-        # start-based guard, so the last window repeats forever.
+        # Stop when the last chunk reaches the end. A start-based guard never fires: start
+        # plateaus at len(tokens) - overlap and the final window repeats forever.
         if end >= len(tokens):
             break
 
@@ -272,12 +271,9 @@ def chunk_by_structure(text: str, elements: list = None,
     Returns:
         List of chunks with metadata
     """
-    # Structure-aware chunking packs whole sentences up to the size limit, so a chunk never
-    # ends mid-sentence the way fixed-size windows do. Paragraph breaks are used as unit
-    # boundaries when they survive cleaning; where the text has been flattened to a single
-    # block, sentences become the units. Any unit still larger than the limit (for example a
-    # wide table rendered as one long line) is split into fixed token windows as a fallback so
-    # no single chunk overflows.
+    # Pack whole sentences up to the size limit so chunks never end mid-sentence. Split on
+    # paragraph breaks where they survive cleaning, else on sentences; oversized units (e.g. a
+    # flattened table) fall back to fixed token windows.
     try:
         encoding = tiktoken.get_encoding("cl100k_base")
     except KeyError:

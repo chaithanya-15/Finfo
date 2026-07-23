@@ -19,9 +19,8 @@ logger = logging.getLogger(__name__)
 # configs/*.yaml so an experiment can switch generator without touching code.
 LOCAL_MODEL_PATTERNS = {
     "Qwen3.5-4B": "models--unsloth--Qwen3.5-4B-GGUF/snapshots/*/Qwen3.5-4B-UD-Q4_K_XL.gguf",
-    # gemma-4-12B has a standard (non-nested) architecture, so unlike gemma-4-E2B it runs on
-    # the Metal backend without crashing on the first decode. Resolved from the Hugging Face
-    # cache after `huggingface-cli download lmstudio-community/gemma-4-12B-it-GGUF`.
+    # gemma-4-12B has a standard architecture, so unlike gemma-4-E2B it runs on Metal without
+    # crashing. Get it with: huggingface-cli download lmstudio-community/gemma-4-12B-it-GGUF
     "gemma-4-12B": "models--lmstudio-community--gemma-4-12B-it-GGUF/snapshots/*/gemma-4-12B-it-Q8_0.gguf",
     "gemma-4-E2B": "models--unsloth--gemma-4-E2B-it-GGUF/snapshots/*/gemma-4-E2B-it-UD-Q4_K_XL.gguf",
 }

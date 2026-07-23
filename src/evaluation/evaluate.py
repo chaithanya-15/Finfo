@@ -250,10 +250,8 @@ class GenerationEvaluator:
         try:
             from sentence_transformers import SentenceTransformer
 
-            # Load the scoring model once and keep it on CPU. It only ever encodes two short
-            # strings per call, so the GPU buys nothing, and staying off the GPU avoids a
-            # crash when a generator (for example gemma's llama.cpp context) has left the
-            # Metal backend in a state that a fresh MPS model load cannot survive.
+            # Load once, keep on CPU: it encodes two short strings per call so the GPU buys
+            # nothing, and a fresh MPS load can crash after a generator has used Metal.
             if getattr(GenerationEvaluator, "_semantic_model", None) is None:
                 GenerationEvaluator._semantic_model = SentenceTransformer(model_name, device="cpu")
             model = GenerationEvaluator._semantic_model

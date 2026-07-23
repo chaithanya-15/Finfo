@@ -19,10 +19,8 @@ Usage:
 
 import os
 
-# Set before torch, faiss, or sentence-transformers import. faiss and torch both link an
-# OpenMP runtime on macOS; without this they abort with a duplicate-libomp segfault the first
-# time a FAISS search runs alongside a torch model. Offline mode stops sentence-transformers
-# making slow network HEAD requests to check for model updates on every load.
+# faiss and torch both link libomp on macOS; without this a FAISS search next to a torch model
+# segfaults. Offline mode skips slow HF update checks. Must run before those imports.
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -91,10 +89,8 @@ def load_qa_data(path: str, pdf_dir: str, limit: Optional[int] = None) -> Dict[s
     if limit:
         rows = rows[:limit]
 
-    # A document counts as available only if extraction produced usable text. Some
-    # downloaded PDFs are corrupt (no valid root object) or near-empty stubs, so the mere
-    # presence of a .pdf file overstates coverage. Fall back to PDF presence only when the
-    # extraction cache has not been built yet.
+    # Available = extraction produced usable text, not just that a .pdf exists (some are
+    # corrupt or empty stubs). Fall back to file presence if the extraction cache is missing.
     extract_cache = Path("data/extracted_text/pdfplumber")
     available = set()
     if extract_cache.exists():
@@ -380,9 +376,8 @@ def main():
 
 if __name__ == "__main__":
     main()
-    # All results are flushed to disk by now. Exit before the interpreter tears down the
-    # llama.cpp Metal context, whose destructor aborts (SIGABRT) on this platform and would
-    # otherwise turn a successful run into a non-zero exit.
+    # Results are on disk; exit before the llama.cpp Metal context destructor aborts (SIGABRT)
+    # and turns a successful run into a non-zero exit.
     sys.stdout.flush()
     sys.stderr.flush()
     os._exit(0)
