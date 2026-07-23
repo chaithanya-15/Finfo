@@ -123,6 +123,16 @@ The evaluation pipeline computes:
 - Citation validation metrics (precision, recall, F1)
 - Error analysis by question type
 
+## Demo (optional)
+
+A small Gradio app answers a question interactively and shows the cited evidence. It is not
+part of the graded pipeline. Install Gradio (`pip install gradio`, kept out of
+`requirements.txt` as it is heavy) and run:
+
+```bash
+python app.py
+```
+
 ## Results and report
 
 The full ablation has been run. Per-configuration metrics are in `results/experiments/`
