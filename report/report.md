@@ -1,6 +1,6 @@
 # Building and Evaluating a Retrieval-Augmented Generation System on FinanceBench
 
-Karthik Reddy Changal, Chaithanya Canugu, Nithin
+Karthik Reddy Changal, Chaithanya Anugu, Nithin Sujith Nair
 
 ## Abstract
 
