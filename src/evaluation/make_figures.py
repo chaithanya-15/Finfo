@@ -325,6 +325,8 @@ def fig_by_type(root: Path, fig_dir: Path, experiment: str):
     metrics = [("recall@5", "Recall@5", BLUE), ("mrr", "MRR", SKY),
                ("semantic_similarity", "semantic sim", GREEN), ("citation_f1", "citation F1", ORANGE)]
     metrics = [m for m in metrics if m[0] in tbl.columns]
+    if not metrics:
+        return
     types = list(tbl.index)
 
     fig, ax = plt.subplots(figsize=(9.5, 4.6))

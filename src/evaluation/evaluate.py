@@ -521,12 +521,12 @@ class RAGEvaluator:
             answer, retrieved_chunks
         )
 
-        # Check if answer contains refusal when appropriate
+        # Flag an abstention. The generator is instructed to reply exactly "Not enough
+        # information in the provided context"; the extra phrases catch close variants.
         refusal_phrases = [
-            "not found in the provided documents",
-            "not in the provided documents",
-            "cannot answer based on the provided context",
-            "information is not available in the context"
+            "not enough information in the provided context",
+            "not enough information",
+            "cannot answer",
         ]
         metrics["has_refusal"] = any(
             phrase in answer.lower() for phrase in refusal_phrases
