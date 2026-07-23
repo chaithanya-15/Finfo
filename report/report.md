@@ -302,7 +302,7 @@ By Recall@5 this looks like almost nothing: 0.509 to 0.516, a gain of 0.007 agai
 0.29. By answer quality it is the largest single improvement in this study. Because gold answers
 are frequently bare figures, we also score numeric agreement, counting an answer correct when a
 gold figure appears in it (years excluded, 0.5% tolerance). On that measure reranking takes the
-system from 0.095 to 0.191, doubling the number of correct answers from 8 to 16, significant by a
+system from 0.095 to 0.190, doubling the number of correct answers from 8 to 16, significant by a
 McNemar exact test (p = 0.039). Abstentions fall from 102 to 89 of 150, and the model is also
 more accurate on the questions it does attempt.
 
@@ -375,7 +375,7 @@ bare figure: metrics-generated questions score 0.001 on ROUGE-L whatever the ans
 | structure-aware | Qwen3.5-4B | 0.102 | 0.321 | 0.107 | 0.070 | 108 |
 | derive prompt | Qwen3.5-4B | 0.084 | 0.329 | 0.119 | 0.245 | 100 |
 | company filter | Qwen3.5-4B | 0.105 | 0.355 | 0.107 | 0.214 | 95 |
-| **company filter + reranking** | Qwen3.5-4B | **0.116** | **0.380** | **0.191** | 0.130 | **89** |
+| **company filter + reranking** | Qwen3.5-4B | **0.116** | **0.380** | **0.190** | 0.130 | **89** |
 | gen_gemma | gemma-4-12B | 0.096 | 0.253 | 0.095 | 0.077 | 112 |
 
 ![Figure 5](../results/figures/generation_models.png)
