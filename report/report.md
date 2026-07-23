@@ -44,8 +44,8 @@ judge's quirks. We use lexical and semantic overlap plus a citation-validity che
 ### 1.3 Contributions
 
 We build a RAG question-answering pipeline that runs end to end on free, local models, and
-ablate four design choices (chunk strategy, retrieved-passage count, embedding model, generation
-model) one variable at a time. Because much of the FinanceBench corpus no longer downloads, we
+ablate five design decisions (chunk strategy, retrieved-passage count, embedding model,
+generation model, and retrieval filtering) one variable at a time. Because much of the FinanceBench corpus no longer downloads, we
 report every metric over both the full question set and the answerable subset, and treat the gap
 as a result. The main finding: retrieval, not generation, is the binding constraint. The best
 configuration finds the gold evidence for under half the answerable questions, and the changes
@@ -119,7 +119,9 @@ search, which for unit vectors is cosine similarity.
 
 Chunks are embedded and stored in a FAISS flat inner-product index, one index per embedding
 model and chunk strategy. At query time the question is embedded with the same model and the
-top-k chunks are returned. We vary k over 3, 5, and 10.
+top-k chunks are returned. We vary k over 3, 5, and 10. Beyond plain dense search we test two
+retrieval strategies (Section 4.2): restricting the candidates to the company named in the
+question, and fusing the dense ranking with a BM25 lexical ranking.
 
 ### 2.7 Generation
 
@@ -180,7 +182,7 @@ configuration.
 constant across configurations, which is what we expect if it comes from missing data rather
 than from any one design choice.
 
-Table 1 gives retrieval quality for all seven configurations on the answerable subset,
+Table 1 gives retrieval quality for every configuration on the answerable subset,
 ordered by Recall@5.
 
 **Table 1. Retrieval metrics on the 114-question answerable subset.**
