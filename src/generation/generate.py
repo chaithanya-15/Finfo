@@ -40,6 +40,57 @@ Rules:
 4. Be brief. State the figure or fact and stop. Do not restate the question or explain your reasoning."""
 
 
+# Second prompt, written against two measured failure modes of the one above. The model
+# abstained on 30% of questions whose evidence had actually been retrieved, and it refused on
+# presentation rather than absence: asked for 3M's FY2018 capital expenditure it replied that
+# the excerpts held no such figure "in a cash flow statement format".
+#
+# Two changes follow from that. Deriving a figure from inputs that are present is stated to be
+# a valid answer, since most FinanceBench metrics answers must be computed rather than read off.
+# And the ban on reasoning is lifted for arithmetic, because 43 of the 150 questions need
+# numerical reasoning and forbidding the working is close to the worst instruction for a small
+# model. Refusal moves last and gets a tighter test, but keeps its exact wording, which both
+# run_experiments.py and the evaluator match on.
+SYSTEM_PROMPT_DERIVE = """You answer questions about financial filings using only the excerpts provided.
+
+Rules:
+1. Answer from the excerpts. A figure often has to be derived rather than read off: when the excerpts contain the inputs, do the arithmetic and give the result. An answer is supported when the numbers behind it appear in the excerpts, even if the final figure never appears verbatim or in the format the question uses.
+2. When a value is calculated, show the arithmetic in one short line, then state the result.
+3. Cite every factual claim with the tag shown above the excerpt you used, for example [APPLE_2022_10K_c17]. Put the citation directly after the claim it supports.
+4. Be brief. State the figure or fact and stop. Do not restate the question.
+5. Only when the excerpts lack the figures needed to answer or to derive the answer, reply exactly: Not enough information in the provided context."""
+
+PROMPTS = {
+    "default": SYSTEM_PROMPT,
+    "derive": SYSTEM_PROMPT_DERIVE,
+}
+
+
+def resolve_prompt(system_prompt: str) -> str:
+    """
+    Turn a configured prompt name into prompt text.
+
+    A bare unknown name is an error rather than a fallback: treating it as literal prompt text
+    would let `prompt: derve` in a config run for half an hour on a one-word system prompt and
+    report the result as if it meant something.
+
+    Args:
+        system_prompt: Key from PROMPTS, or the prompt text itself
+
+    Returns:
+        The prompt text
+
+    Raises:
+        ValueError: If given a short bare string that is not a known key
+    """
+    if system_prompt in PROMPTS:
+        return PROMPTS[system_prompt]
+    if "\n" in system_prompt or len(system_prompt) > 80:
+        return system_prompt
+    raise ValueError(f"Unknown prompt '{system_prompt}'. Known: {sorted(PROMPTS)}. "
+                     "Pass the prompt text itself to use something else.")
+
+
 def resolve_model_path(model_name: str, cache_dir: Optional[str] = None) -> str:
     """
     Resolve a configured model name to a GGUF file on this machine.
@@ -106,7 +157,8 @@ class FinancialQAModel:
     """Generates cited answers from retrieved financial filing excerpts."""
 
     def __init__(self, model_path: str, n_ctx: int = 8192, n_gpu_layers: int = -1,
-                 seed: int = 1234, verbose: bool = False):
+                 seed: int = 1234, verbose: bool = False,
+                 system_prompt: str = "default"):
         """
         Load a GGUF model through llama.cpp.
 
@@ -116,11 +168,13 @@ class FinancialQAModel:
             n_gpu_layers: Layers to offload to the GPU, -1 for all
             seed: Sampling seed, fixed so runs are reproducible
             verbose: Pass llama.cpp's own logging through
+            system_prompt: Key from PROMPTS, or the prompt text itself
         """
         from llama_cpp import Llama
 
         self.model_path = model_path
         self.n_ctx = n_ctx
+        self.system_prompt = resolve_prompt(system_prompt)
         logger.info(f"Loading generator from {model_path}")
         self.llm = Llama(
             model_path=model_path,
@@ -206,7 +260,7 @@ class FinancialQAModel:
 
         response = self.llm.create_chat_completion(
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": built["prompt"]},
             ],
             max_tokens=max_new_tokens,
@@ -235,7 +289,7 @@ class FinancialQAModel:
 
 def create_qa_pipeline(model_name: str = "Qwen3.5-4B", device: str = "auto",
                        load_in_4bit: bool = True, n_ctx: int = 8192,
-                       **kwargs) -> FinancialQAModel:
+                       system_prompt: str = "default", **kwargs) -> FinancialQAModel:
     """
     Build a generation pipeline from config values.
 
@@ -248,6 +302,7 @@ def create_qa_pipeline(model_name: str = "Qwen3.5-4B", device: str = "auto",
         device: Kept for interface compatibility, llama.cpp selects the backend itself
         load_in_4bit: Kept for interface compatibility, the GGUF weights are already 4-bit
         n_ctx: Context window in tokens
+        system_prompt: Key from PROMPTS ("default" or "derive"), or the prompt text itself
         **kwargs: Passed through to FinancialQAModel
 
     Returns:
@@ -258,7 +313,8 @@ def create_qa_pipeline(model_name: str = "Qwen3.5-4B", device: str = "auto",
 
     model_path = resolve_model_path(model_name)
     n_gpu_layers = 0 if device == "cpu" else -1
-    return FinancialQAModel(model_path=model_path, n_ctx=n_ctx, n_gpu_layers=n_gpu_layers, **kwargs)
+    return FinancialQAModel(model_path=model_path, n_ctx=n_ctx, n_gpu_layers=n_gpu_layers,
+                            system_prompt=system_prompt, **kwargs)
 
 
 if __name__ == "__main__":
