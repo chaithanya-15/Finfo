@@ -6,15 +6,16 @@ Karthik Reddy Changal, Chaithanya Canugu, Nithin
 
 We build and evaluate a retrieval-augmented generation (RAG) pipeline that answers questions
 about financial filings using only a closed collection of SEC documents, on free models that
-run locally. We compare configurations along four axes: chunk strategy, retrieved-passage
-count, embedding model, and generation model. On the 114 questions whose source document is
-available, the best configuration retrieves the gold evidence into its top five passages 47.5%
-of the time; generation is the weaker stage, and because the model refuses when the passages do
-not support an answer, it abstains on roughly two-thirds of questions rather than inventing
-figures. Structure-aware chunking and the larger embedding model help retrieval most, while a
-bigger generator and more retrieved passages do not. We report every metric over both the full
-150-question set and the answerable subset, because a fifth of the FinanceBench corpus no longer
-downloads, and we treat that coverage gap as a result rather than hiding it.
+run locally. We compare configurations across chunk strategy, retrieved-passage count,
+embedding model, generation model, and retrieval filtering. On the 114 questions whose source
+document is available, restricting retrieval to the company named in the question gives the
+best retrieval (Recall@5 0.51, up from 0.46 for pure dense search); structure-aware chunking
+and the larger embedding model help modestly, while a BM25 hybrid and a three-times-larger
+generator do not. Generation is the weaker stage, and because the model refuses when the
+passages do not support an answer, it abstains on roughly two-thirds of questions rather than
+inventing figures. We report every metric over both the full 150-question set and the
+answerable subset, because a fifth of the FinanceBench corpus no longer downloads, and we treat
+that coverage gap as a result rather than hiding it.
 
 ## 1. Introduction
 
@@ -153,9 +154,9 @@ sentence-transformers. Embedding runs on the Apple GPU through MPS. Hardware: Ap
 One configuration is the reference (512-token chunks, bge-base embeddings, k=5, Qwen3.5-4B), the
 baseline against which the others are read. Each other run changes one variable so its effect is
 isolated: chunk strategy (256-token and structure-aware), k (3 and 10), embedding model
-(MiniLM), and generator (gemma-4-12B). The experiment matrix is `configs/experiments.yaml`.
-Indexes are cached and shared across runs, so each embedding-model-and-strategy pair is built
-once.
+(MiniLM), generator (gemma-4-12B), and retrieval strategy (company metadata filtering, and a
+dense + BM25 hybrid). The experiment matrix is `configs/experiments.yaml`. Indexes are cached
+and shared across runs, so each embedding-model-and-strategy pair is built once.
 
 ## 4. Results
 
@@ -186,11 +187,13 @@ ordered by Recall@5.
 
 | Configuration | Ablation axis | Recall@1 | Recall@5 | Recall@10 | MRR |
 | --- | --- | --- | --- | --- | --- |
-| structure-aware chunks | chunk size | 0.244 | **0.475** | 0.475 | 0.333 |
+| company filter | retrieval filter | 0.259 | **0.509** | 0.509 | **0.358** |
+| structure-aware chunks | chunk size | 0.244 | 0.475 | 0.475 | 0.333 |
 | 512-token chunks (reference) | reference | 0.232 | 0.456 | 0.456 | 0.323 |
-| k = 10 | retrieval k | 0.232 | 0.456 | **0.504** | 0.329 |
+| k = 10 | retrieval k | 0.232 | 0.456 | 0.504 | 0.329 |
 | k = 3 | retrieval k | 0.232 | 0.409 | 0.409 | 0.311 |
 | MiniLM embeddings | embedding model | 0.149 | 0.395 | 0.395 | 0.243 |
+| dense + BM25 hybrid | retrieval filter | 0.124 | 0.379 | 0.379 | 0.218 |
 | 256-token chunks | chunk size | 0.161 | 0.282 | 0.282 | 0.203 |
 
 Generation is weaker and limited by retrieval. On the answerable subset the reference system
@@ -207,7 +210,8 @@ it varies.
 ![Figure 3](../results/figures/retrieval_ablation.png)
 
 **Figure 3. Recall@5 by configuration, coloured by ablation axis.** The dashed line marks the
-reference. Structure-aware chunking is the only change that beats it.
+reference. Restricting retrieval to the company named in the question is the largest gain;
+structure-aware chunking is the best of the content-only changes.
 
 #### Chunk size and structure
 
@@ -240,6 +244,24 @@ to the prompt. Figure 4 shows the recall-versus-k curves.
 
 **Figure 4. Recall@k for the reference, the structure-aware chunker, and k=10.** Raising k
 lifts the tail of the curve (Recall@10) without changing where the first correct passage lands.
+
+#### Retrieval filtering and hybrid search
+
+The content-only changes above move Recall@5 within a narrow band (0.28 to 0.48), which fits
+the picture that dense similarity over the whole corpus is the ceiling. Two changes attack that
+ceiling directly. Each FinanceBench question names its target company, and every chunk carries
+that company in its metadata, so we can restrict the search to the chunks of the company named
+in the question (inferred from the question text, never the gold answer). This company filter
+is the single best configuration: Recall@5 rises to 0.509 and MRR to 0.358, above every
+chunking, k, or embedding change. The gain is bounded by company extraction, a simple
+name-match catches the company in about 85% of questions, so the remaining misses inherit the
+unfiltered behaviour; a better entity extractor would raise it further.
+
+Hybrid retrieval, fusing the dense ranking with a BM25 lexical ranking by reciprocal rank
+fusion, does the opposite: Recall@5 falls to 0.379, below the reference. On these filings BM25
+rewards shared boilerplate vocabulary, and the natural-language question terms rarely match the
+tabular numbers that hold the answer, so the lexical signal adds noise rather than precision. A
+useful negative result: not every standard retrieval add-on helps on this corpus.
 
 #### Generation model
 
@@ -312,12 +334,16 @@ questions score near zero on ROUGE-L because their answers are bare numbers.
 ### 5.1 Key findings
 
 Retrieval is the binding constraint: generation scores track retrieval scores across every
-configuration. The largest lever on retrieval is chunking; keeping chunks whole and reasonably
-large (structure-aware or 512-token) beats halving the window. The changes that help improve
-what the model is shown, not how: the larger embedding model and the structure-aware chunker
-raise recall, while more retrieved passages and a larger generator do not. Reporting the
-answerable subset separately matters: it turns the reference system's Recall@5 from 0.36 over
-all questions into 0.46 on the questions whose document is present. That gap is data, not model.
+configuration. Among content-only changes the larger embedding model and structure-aware
+chunking help while halving the chunk beats nothing, but they all stay within a narrow band,
+which says pure dense search over the whole corpus is close to its ceiling. The change that
+raises it uses metadata the corpus already carries: restricting retrieval to the company named
+in the question lifts Recall@5 to 0.51, the best of any configuration. A generic BM25 hybrid
+instead hurts, because financial filings share boilerplate that the lexical signal over-weights.
+A three-times-larger generator on identical retrieval changes nothing, which confirms the
+constraint is upstream in retrieval. Reporting the answerable subset separately matters too: it turns the
+reference system's Recall@5 from 0.36 over all questions into 0.46 on the questions whose
+document is present. That gap is data, not model.
 
 ### 5.2 Limitations
 
@@ -354,18 +380,21 @@ system.
 ## 6. Conclusion
 
 We built a RAG question-answering pipeline for financial filings on free, local models, and
-measured how four design decisions affect performance on FinanceBench. Retrieval sets the
-ceiling: the gold evidence reaches the model for under half the answerable questions, and the
-configurations that help (structure-aware chunking, a larger embedding model) are the ones that
-help retrieval. The small 4-bit generators mostly fail safe, abstaining rather than inventing
-figures. Because much of the corpus no longer downloads, separating missing data from model
-error is what keeps the evaluation honest.
+measured how chunking, k, embedding model, generator, and retrieval filtering affect
+performance on FinanceBench. Retrieval sets the ceiling: the gold evidence reaches the model for
+under half the answerable questions under pure dense search, and the content-only knobs move it
+little. The change that helped most was filtering retrieval to the company named in the
+question, which lifted Recall@5 from 0.46 to 0.51 using metadata the corpus already carries; a
+BM25 hybrid hurt, and a larger generator did nothing. The small 4-bit generators mostly fail
+safe, abstaining rather than inventing figures. Because much of the corpus no longer downloads,
+separating missing data from model error is what keeps the evaluation honest.
 
-Three directions follow. Recovering the missing corpus would let the full-set numbers measure
-the model rather than the dataset's decay. A larger or arithmetic-tuned generator would test
-whether the numerical questions that survive retrieval but fail generation are answerable at all
-locally. Exact-span evidence matching, replacing the token-coverage proxy, would let close
-configurations be compared with more confidence.
+The company filter also points at the next steps. A stronger entity extractor (it currently
+resolves the company in about 85% of questions) and filtering on the fiscal year as well as the
+company would tighten retrieval further. Beyond that, recovering the missing corpus would let
+the full-set numbers measure the model rather than the dataset's decay, and exact-span evidence
+matching would replace the token-coverage proxy so close configurations can be compared with
+more confidence.
 
 ## References
 
