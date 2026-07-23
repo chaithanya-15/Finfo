@@ -7,15 +7,19 @@ Karthik Reddy Changal, Chaithanya Anugu, Nithin Sujith Nair
 We build and evaluate a retrieval-augmented generation (RAG) pipeline that answers questions
 about financial filings using only a closed collection of SEC documents, on free models that
 run locally. We compare configurations across chunk strategy, retrieved-passage count,
-embedding model, generation model, and retrieval filtering. On the 114 questions whose source
-document is available, restricting retrieval to the company named in the question gives the
-best retrieval (Recall@5 0.51, up from 0.46 for pure dense search); structure-aware chunking
-and the larger embedding model help modestly, while a BM25 hybrid and a three-times-larger
-generator do not. Generation is the weaker stage, and because the model refuses when the
-passages do not support an answer, it abstains on roughly two-thirds of questions rather than
-inventing figures. We report every metric over both the full 150-question set and the
-answerable subset, because a fifth of the FinanceBench corpus no longer downloads, and we treat
-that coverage gap as a result rather than hiding it.
+embedding model, generation model, retrieval filtering, cross-encoder reranking, and prompting.
+On the 114 questions whose source document is available, the best configuration restricts
+retrieval to the company named in the question and reorders a deep candidate pool with a
+cross-encoder, reaching Recall@5 0.52 against 0.46 for pure dense search. The headline result is
+methodological: measured by Recall@5 the company filter supplies 88% of the gain and reranking
+only 12%, but measured by whether the system answers correctly the shares are almost exactly
+reversed, because reranking raises how often the right filing reaches the generator without
+moving the token-overlap score the retrieval metric is built on. Reranking doubles the number of
+correct answers; a BM25 hybrid, a three-times-larger generator and a prompt written to reduce
+refusals all fail to help. Generation remains the weaker stage, and the system declines to answer
+rather than inventing figures on roughly two-thirds of questions. We report every metric over
+both the full 150-question set and the answerable subset, because a fifth of the FinanceBench
+corpus no longer downloads, and we treat that coverage gap as a result rather than hiding it.
 
 ## 1. Introduction
 
@@ -43,13 +47,16 @@ judge's quirks. We use lexical and semantic overlap plus a citation-validity che
 
 ### 1.3 Contributions
 
-We build a RAG question-answering pipeline that runs end to end on free, local models, and
-ablate five design decisions (chunk strategy, retrieved-passage count, embedding model,
-generation model, and retrieval filtering) one variable at a time. Because much of the FinanceBench corpus no longer downloads, we
-report every metric over both the full question set and the answerable subset, and treat the gap
-as a result. The main finding: retrieval, not generation, is the binding constraint. The best
-configuration finds the gold evidence for under half the answerable questions, and the changes
-that help are the ones that help retrieval.
+We build a RAG question-answering pipeline that runs end to end on free, local models, and ablate
+seven design decisions (chunk strategy, retrieved-passage count, embedding model, generation
+model, retrieval filtering, cross-encoder reranking, and prompting) one variable at a time.
+Because much of the FinanceBench corpus no longer downloads, we report every metric over both the
+full question set and the answerable subset, and treat the gap as a result. Two findings follow.
+Retrieval, not generation, is the binding constraint: the best configuration finds the gold
+evidence for barely half the answerable questions. And the retrieval metric itself is an
+unreliable guide to which changes help, ranking the two interventions we tested in the opposite
+order to their effect on answer quality, which is a caution for anyone tuning a RAG system
+against Recall@k alone.
 
 ## 2. Methodology
 
@@ -119,9 +126,13 @@ search, which for unit vectors is cosine similarity.
 
 Chunks are embedded and stored in a FAISS flat inner-product index, one index per embedding
 model and chunk strategy. At query time the question is embedded with the same model and the
-top-k chunks are returned. We vary k over 3, 5, and 10. Beyond plain dense search we test two
+top-k chunks are returned. We vary k over 3, 5, and 10. Beyond plain dense search we test three
 retrieval strategies (Section 4.2): restricting the candidates to the company named in the
-question, and fusing the dense ranking with a BM25 lexical ranking.
+question, fusing the dense ranking with a BM25 lexical ranking, and reranking. The reranker
+retrieves a pool of 50 candidates and reorders them with bge-reranker-base, a cross-encoder that
+scores a question and a passage together rather than embedding them separately, which is slower
+but sensitive to whether a passage answers the question rather than merely resembling it. It runs
+locally like the rest of the pipeline.
 
 ### 2.7 Generation
 
@@ -156,9 +167,16 @@ sentence-transformers. Embedding runs on the Apple GPU through MPS. Hardware: Ap
 One configuration is the reference (512-token chunks, bge-base embeddings, k=5, Qwen3.5-4B), the
 baseline against which the others are read. Each other run changes one variable so its effect is
 isolated: chunk strategy (256-token and structure-aware), k (3 and 10), embedding model
-(MiniLM), generator (gemma-4-12B), and retrieval strategy (company metadata filtering, and a
-dense + BM25 hybrid). The experiment matrix is `configs/experiments.yaml`. Indexes are cached
-and shared across runs, so each embedding-model-and-strategy pair is built once.
+(MiniLM), generator (gemma-4-12B), retrieval strategy (company metadata filtering, a dense + BM25
+hybrid, and cross-encoder reranking over a company-filtered pool), and the generator's
+instructions (a prompt that permits deriving figures and showing arithmetic). The experiment
+matrix is `configs/experiments.yaml`. Indexes are cached and shared across runs, so each
+embedding-model-and-strategy pair is built once.
+
+Two arms deliberately change two things at once, so a third separates them. Reranking is applied
+on top of the company filter rather than alone, because the pool the cross-encoder reorders is
+worth more when it is already restricted to the right company; the filter is therefore also run
+with generation enabled so its contribution can be measured on its own (Table 2).
 
 ## 4. Results
 
@@ -189,18 +207,24 @@ ordered by Recall@5.
 
 | Configuration | Ablation axis | Recall@1 | Recall@5 | Recall@10 | MRR |
 | --- | --- | --- | --- | --- | --- |
-| company filter | retrieval filter | 0.259 | **0.509** | 0.509 | **0.358** |
+| company filter + reranking | reranking | 0.249 | **0.516** | 0.516 | **0.360** |
+| company filter | retrieval filter | 0.259 | 0.509 | 0.509 | 0.358 |
 | structure-aware chunks | chunk size | 0.244 | 0.475 | 0.475 | 0.333 |
 | 512-token chunks (reference) | reference | 0.232 | 0.456 | 0.456 | 0.323 |
 | k = 10 | retrieval k | 0.232 | 0.456 | 0.504 | 0.329 |
+| derive prompt | prompting | 0.232 | 0.456 | 0.456 | 0.323 |
 | k = 3 | retrieval k | 0.232 | 0.409 | 0.409 | 0.311 |
 | MiniLM embeddings | embedding model | 0.149 | 0.395 | 0.395 | 0.243 |
 | dense + BM25 hybrid | retrieval filter | 0.124 | 0.379 | 0.379 | 0.218 |
 | 256-token chunks | chunk size | 0.161 | 0.282 | 0.282 | 0.203 |
 
+The derive-prompt run changes only the generator's instructions, so its retrieval scores are
+identical to the reference by construction; it appears here for completeness and is discussed in
+Section 4.2.
+
 Generation is weaker and limited by retrieval. On the answerable subset the reference system
-reaches ROUGE-L 0.10 and semantic similarity 0.33, and abstains ("Not enough information in the
-provided context") on 99 of 150 questions. The abstention rate follows from retrieval: when the
+reaches ROUGE-L 0.10 and semantic similarity 0.33, and declines to answer on 102 of 150
+questions. The abstention rate follows from retrieval: when the
 evidence does not reach the model, the prompt tells it to refuse, so a retrieval miss becomes an
 abstention rather than a wrong figure.
 
@@ -212,8 +236,9 @@ it varies.
 ![Figure 3](../results/figures/retrieval_ablation.png)
 
 **Figure 3. Recall@5 by configuration, coloured by ablation axis.** The dashed line marks the
-reference. Restricting retrieval to the company named in the question is the largest gain;
-structure-aware chunking is the best of the content-only changes.
+reference. Company filtering followed by reranking gives the highest score; structure-aware
+chunking is the best of the content-only changes. The derive-prompt run sits exactly on the
+reference line because it changes only the generator's instructions.
 
 #### Chunk size and structure
 
@@ -265,27 +290,93 @@ rewards shared boilerplate vocabulary, and the natural-language question terms r
 tabular numbers that hold the answer, so the lexical signal adds noise rather than precision. A
 useful negative result: not every standard retrieval add-on helps on this corpus.
 
+#### Reranking, and what the retrieval metric cannot see
+
+Recall keeps climbing well past k=10: under the company filter it reaches 0.583 at k=10, 0.702 at
+k=20 and 0.801 at k=50. The evidence is therefore usually inside a deep candidate pool and simply
+ranked too low, which is what a cross-encoder is for. We retrieve a company-filtered pool of 50
+and reorder it with bge-reranker-base, a locally run cross-encoder that scores each
+question-and-passage pair jointly.
+
+By Recall@5 this looks like almost nothing: 0.509 to 0.516, a gain of 0.007 against an available
+0.29. By answer quality it is the largest single improvement in this study. Because gold answers
+are frequently bare figures, we also score numeric agreement, counting an answer correct when a
+gold figure appears in it (years excluded, 0.5% tolerance). On that measure reranking takes the
+system from 0.095 to 0.191, doubling the number of correct answers from 8 to 16, significant by a
+McNemar exact test (p = 0.039). Abstentions fall from 102 to 89 of 150, and the model is also
+more accurate on the questions it does attempt.
+
+Running the company filter with generation separates the two changes, and the result inverts the
+retrieval picture:
+
+**Table 2. Where the gain actually comes from, answerable subset.**
+
+| Component | Share of Recall@5 gain | Share of answer-quality gain |
+| --- | --- | --- |
+| company filter | +0.053 (88%) | +0.012 (12%) |
+| cross-encoder reranking | +0.007 (12%) | +0.083 (87%) |
+
+The retrieval metric ranks these two interventions in the opposite order to their effect on
+answers. The reason is visible in a direct measurement: reranking lifts the rate at which the
+correct filing appears in the top 5 from 0.605 to 0.746, while barely moving the token-overlap
+score the metric is built on. Getting the right document in front of the generator is what the
+generator needs, and Recall@5 as defined here is close to blind to it.
+
+Two cases make this concrete. Asked for 3M's FY2018 capital expenditure (gold $1,577m), the
+filtered system answered "$1,493 million" from a 2015 filing and the reranked system answered
+"$1,577 million" from the 2020 filing; both scored Recall@5 of 0.00. Asked for Amazon's FY2019
+net income (gold $11,588m), both scored Recall@5 of 1.00, but the filtered system answered
+"$33,364 million" and the reranked system "$11,588 million". Of the nine questions reranking
+fixed, Recall@5 improved on only three.
+
+Reranking is not uniformly better: it also caused two questions that were previously answered
+correctly to be refused. The trade is nine gained against two lost.
+
+#### Prompting and abstention
+
+The system refuses on 102 of 150 questions, and on 40% of questions whose evidence was
+successfully retrieved, which suggests instructions rather than evidence are the binding
+constraint for some of them. Inspection supported this: asked for a capital-expenditure figure,
+the model replied that the excerpts did not contain it "in a cash flow statement format", a
+refusal about presentation rather than absence. We therefore tested a second prompt that states
+that deriving a figure from inputs present in the excerpts is a valid answer, permits one line of
+arithmetic, and demotes refusal from the first rule to the last.
+
+It does not work. Refusals move from 102 to 100 of 150 and numeric agreement from 0.095 to 0.119,
+a difference of two questions (p = 0.50). The model largely rephrases its refusals rather than
+attempting more answers, which also exposed a measurement bug: our abstention counter matched
+only the exact instructed refusal string, so reworded refusals were being counted as attempts.
+Correcting it raised the reference system's abstention count from 99 to 102 and is the reason the
+figures here differ from an earlier version of this report. Accuracy on the questions the model
+does answer improves (0.242 to 0.278), so permitting arithmetic plausibly helps once it commits;
+it simply does not make it commit more often. We report this as a negative result.
+
 #### Generation model
 
 Making the generator larger does not help. Holding retrieval fixed at the reference setup and
 swapping Qwen3.5-4B for gemma-4-12B, a model three times the size from a different family, moves
 none of the generation metrics in gemma's favour: ROUGE-L is 0.096 against Qwen's 0.100,
 semantic similarity is lower (0.253 against 0.329), and citation F1 is level (0.077 against
-0.080). gemma only abstains more often, on 112 of 150 questions against Qwen's 99 (Figure 5).
+0.080). gemma only declines more often, on 112 of 150 questions against Qwen's 102 (Figure 5).
 Given identical retrieval, the larger model is more conservative about answering from passages
 that may not contain the fact, which makes little difference to the scores. This fits the rest
 of the ablation: when the evidence reaches the model less than half the time, a bigger generator
 has little to work with. gemma-4-12B also runs at roughly a third of Qwen's tokens per second on
 the same GPU, so it is the more expensive of the two for no measured benefit.
 
-**Table 2. Generation and citation metrics, answerable subset.**
+**Table 3. Generation and citation metrics, answerable subset.** Numeric agreement counts an
+answer correct when a gold figure appears in it, and is reported because ROUGE-L cannot score a
+bare figure: metrics-generated questions score 0.001 on ROUGE-L whatever the answer.
 
-| Configuration | Generator | ROUGE-L | Semantic sim | Citation F1 | Abstained (of 150) |
-| --- | --- | --- | --- | --- | --- |
-| reference | Qwen3.5-4B | 0.100 | 0.329 | 0.080 | 99 |
-| 256-token chunks | Qwen3.5-4B | 0.101 | 0.306 | 0.113 | 101 |
-| structure-aware | Qwen3.5-4B | 0.102 | 0.321 | 0.070 | 102 |
-| gen_gemma | gemma-4-12B | 0.096 | 0.253 | 0.077 | 112 |
+| Configuration | Generator | ROUGE-L | Semantic sim | Numeric agr. | Citation F1 | Declined (of 150) |
+| --- | --- | --- | --- | --- | --- | --- |
+| reference | Qwen3.5-4B | 0.100 | 0.329 | 0.095 | 0.080 | 102 |
+| 256-token chunks | Qwen3.5-4B | 0.101 | 0.306 | 0.107 | 0.113 | 105 |
+| structure-aware | Qwen3.5-4B | 0.102 | 0.321 | 0.107 | 0.070 | 108 |
+| derive prompt | Qwen3.5-4B | 0.084 | 0.329 | 0.119 | 0.245 | 100 |
+| company filter | Qwen3.5-4B | 0.105 | 0.355 | 0.107 | 0.214 | 95 |
+| **company filter + reranking** | Qwen3.5-4B | **0.116** | **0.380** | **0.191** | 0.130 | **89** |
+| gen_gemma | gemma-4-12B | 0.096 | 0.253 | 0.095 | 0.077 | 112 |
 
 ![Figure 5](../results/figures/generation_models.png)
 
@@ -323,29 +414,39 @@ penalise bare numbers, regardless of correctness.
 **Figure 7. Reference-run metrics by question type, answerable subset.** Metrics-generated
 questions score near zero on ROUGE-L because their answers are bare numbers.
 
-**Table 3. Reference run by question type (answerable subset).**
+**Table 4. Reference run by question type (answerable subset).**
 
 | Question type | Recall@5 | MRR | ROUGE-L | Semantic sim | Citation F1 |
 | --- | --- | --- | --- | --- | --- |
-| domain-relevant | 0.357 | 0.207 | 0.154 | 0.455 | 0.101 |
-| metrics-generated | 0.347 | 0.295 | 0.001 | 0.204 | 0.060 |
-| novel-generated | 0.681 | 0.485 | 0.135 | 0.307 | 0.076 |
+| domain-relevant | 0.357 | 0.207 | 0.154 | 0.455 | 0.166 |
+| metrics-generated | 0.347 | 0.295 | 0.001 | 0.204 | 0.059 |
+| novel-generated | 0.681 | 0.485 | 0.135 | 0.307 | 0.064 |
 
 ## 5. Discussion
 
 ### 5.1 Key findings
 
-Retrieval is the binding constraint: generation scores track retrieval scores across every
-configuration. Among content-only changes the larger embedding model and structure-aware
-chunking help while halving the chunk beats nothing, but they all stay within a narrow band,
-which says pure dense search over the whole corpus is close to its ceiling. The change that
-raises it uses metadata the corpus already carries: restricting retrieval to the company named
-in the question lifts Recall@5 to 0.51, the best of any configuration. A generic BM25 hybrid
-instead hurts, because financial filings share boilerplate that the lexical signal over-weights.
-A three-times-larger generator on identical retrieval changes nothing, which confirms the
-constraint is upstream in retrieval. Reporting the answerable subset separately matters too: it turns the
-reference system's Recall@5 from 0.36 over all questions into 0.46 on the questions whose
-document is present. That gap is data, not model.
+Retrieval is the binding constraint. Among content-only changes the larger embedding model and
+structure-aware chunking help while halving the chunk beats nothing, but they all stay within a
+narrow band, which says pure dense search over the whole corpus is close to its ceiling. Two
+changes raise it, and both use structure the corpus already carries rather than a bigger model:
+restricting retrieval to the company named in the question, and reordering a deep candidate pool
+with a cross-encoder. Together they give the best configuration at Recall@5 0.52 and double the
+number of questions answered correctly. A generic BM25 hybrid instead hurts, because financial
+filings share boilerplate that the lexical signal over-weights, and a three-times-larger
+generator on identical retrieval changes nothing, which confirms the constraint is upstream.
+
+The second finding concerns measurement. Recall@5 credits the company filter with 88% of the
+retrieval gain and reranking with 12%; on whether the system answers correctly those shares
+reverse. A metric that asks whether one chunk shares half its content words with a gold span
+cannot see reordering, and reordering is what determines whether the right filing reaches the
+generator. Tuning against Recall@k alone would have led us to keep the weaker change and drop the
+stronger one. ROUGE-L has the same defect on the generation side, scoring 0.001 wherever the gold
+answer is a bare figure.
+
+Reporting the answerable subset separately matters too: it turns the reference system's Recall@5
+from 0.36 over all questions into 0.46 on the questions whose document is present. That gap is
+data, not model.
 
 ### 5.2 Limitations
 
@@ -363,11 +464,16 @@ tuned.
 Generation uses small 4-bit models so the pipeline runs locally and for free, so absolute
 answer quality trails a larger hosted model, especially on arithmetic over a table. Because the
 models refuse when the passages do not support an answer, most error surfaces as abstention, the
-safer failure here but still a ceiling on how many questions get answered. We set a fixed
-decoding seed, but the llama.cpp Metal backend is not bit-reproducible, so re-running a
-configuration shifts the generation metrics by a small amount (the citation and ROUGE scores
-move by up to about 0.02, retrieval is unaffected). We report a single run and did not average
-over seeds, so small differences between close configurations should be read with care. Finally,
+safer failure here but still a ceiling on how many questions get answered. Generation itself is
+reproducible: re-running a configuration returns bit-identical answers, and so identical ROUGE-L
+and exact-match scores. An earlier version of this report attributed observed run-to-run drift to
+the llama.cpp Metal backend, which was wrong. The drift came from our own citation-recall metric,
+which sampled keywords from a Python set and so depended on per-process hash ordering; the same
+answer scored differently on each run. That is fixed, but the citation figures reported here
+predate the fix and are one draw from that distribution, so citation F1 should be read as
+indicative rather than exact. Citation precision is unaffected and is the reliable citation
+number. We report a single run per configuration, so small differences between close
+configurations should still be read with care. Finally,
 pdfplumber recovers table text but flattens its row and column structure, one likely reason
 table-heavy numerical questions are hardest.
 
@@ -382,21 +488,26 @@ system.
 ## 6. Conclusion
 
 We built a RAG question-answering pipeline for financial filings on free, local models, and
-measured how chunking, k, embedding model, generator, and retrieval filtering affect
-performance on FinanceBench. Retrieval sets the ceiling: the gold evidence reaches the model for
-under half the answerable questions under pure dense search, and the content-only knobs move it
-little. The change that helped most was filtering retrieval to the company named in the
-question, which lifted Recall@5 from 0.46 to 0.51 using metadata the corpus already carries; a
-BM25 hybrid hurt, and a larger generator did nothing. The small 4-bit generators mostly fail
-safe, abstaining rather than inventing figures. Because much of the corpus no longer downloads,
-separating missing data from model error is what keeps the evaluation honest.
+measured how chunking, k, embedding model, generator, retrieval filtering, reranking and
+prompting affect performance on FinanceBench. Retrieval sets the ceiling: the gold evidence
+reaches the model for barely half the answerable questions, and the content-only knobs move it
+little. What helped was structure the corpus already carries, not a bigger model. Filtering to
+the company named in the question and then reordering a deep pool with a cross-encoder together
+lift Recall@5 from 0.46 to 0.52 and double the number of questions answered correctly, from 8 to
+16. A BM25 hybrid hurt, a larger generator did nothing, and a prompt written to make the model
+refuse less simply made it rephrase its refusals. The small 4-bit generators mostly fail safe,
+declining rather than inventing figures.
 
-The company filter also points at the next steps. A stronger entity extractor (it currently
-resolves the company in about 85% of questions) and filtering on the fiscal year as well as the
-company would tighten retrieval further. Beyond that, recovering the missing corpus would let
-the full-set numbers measure the model rather than the dataset's decay, and exact-span evidence
-matching would replace the token-coverage proxy so close configurations can be compared with
-more confidence.
+The finding that generalises is about measurement. Ranked by Recall@5 the company filter is worth
+seven times what reranking is worth; ranked by whether the system answers correctly, reranking is
+worth seven times the filter. Trusting the retrieval metric would have meant keeping the weaker
+change and dropping the stronger one.
+
+Three directions follow. An exact-span evidence metric would replace the token-coverage proxy
+that produced the inversion above. Reranking has more to give, since Recall@50 under the company
+filter is 0.80 against the 0.52 currently reaching the generator, so a stronger cross-encoder or
+a deeper pool should convert more of that gap. And recovering the missing corpus would let the
+full-set numbers measure the model rather than the dataset's decay.
 
 ## References
 
