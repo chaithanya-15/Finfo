@@ -35,7 +35,7 @@ project/
 
 1. **Install uv** (if not already installed):
    ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
+   curl -LsSf https://astral.sh/uv/install.sh | sh  # On Windows: irm https://astral.sh/uv/install.ps1 | iex
    ```
 
 2. **Create a virtual environment**:
