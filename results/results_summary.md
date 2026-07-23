@@ -7,11 +7,13 @@ answerable subset (documents that yield usable text); the full set is 150.
 
 | config | axis | R@1 | R@5 | R@10 | MRR |
 | --- | --- | --- | --- | --- | --- |
+| rerank_filtered | reranking | 0.249 | 0.516 | 0.516 | 0.360 |
 | filtered_meta | retrieval_filter | 0.259 | 0.509 | 0.509 | 0.358 |
 | chunk_structure | chunk_size | 0.244 | 0.475 | 0.475 | 0.333 |
 | baseline | reference | 0.232 | 0.456 | 0.456 | 0.323 |
 | gen_gemma | generation_model | 0.232 | 0.456 | 0.456 | 0.323 |
 | k_10 | retrieval_k | 0.232 | 0.456 | 0.504 | 0.329 |
+| prompt_derive | prompting | 0.232 | 0.456 | 0.456 | 0.323 |
 | k_3 | retrieval_k | 0.232 | 0.409 | 0.409 | 0.311 |
 | embed_minilm | embedding_model | 0.149 | 0.395 | 0.395 | 0.243 |
 | hybrid | retrieval_filter | 0.124 | 0.379 | 0.379 | 0.218 |
@@ -21,10 +23,13 @@ answerable subset (documents that yield usable text); the full set is 150.
 
 | config | model | ROUGE-L | semantic | cit F1 | abstained |
 | --- | --- | --- | --- | --- | --- |
-| baseline | Qwen3.5-4B | 0.100 | 0.329 | 0.080 | 99.000 |
-| chunk_256 | Qwen3.5-4B | 0.101 | 0.306 | 0.113 | 101.000 |
-| chunk_structure | Qwen3.5-4B | 0.102 | 0.321 | 0.070 | 102.000 |
+| baseline | Qwen3.5-4B | 0.100 | 0.329 | 0.080 | 102.000 |
+| chunk_256 | Qwen3.5-4B | 0.101 | 0.306 | 0.113 | 105.000 |
+| chunk_structure | Qwen3.5-4B | 0.102 | 0.321 | 0.070 | 108.000 |
 | gen_gemma | gemma-4-12B | 0.096 | 0.253 | 0.077 | 112.000 |
+| filtered_meta | Qwen3.5-4B | 0.105 | 0.355 | 0.214 | 95.000 |
+| rerank_filtered | Qwen3.5-4B | 0.116 | 0.380 | 0.130 | 89.000 |
+| prompt_derive | Qwen3.5-4B | 0.084 | 0.329 | 0.245 | 100.000 |
 
 ## Answerable versus all, Recall@5
 
@@ -37,8 +42,10 @@ answerable subset (documents that yield usable text); the full set is 150.
 | gen_gemma | 0.360 | 0.456 |
 | k_10 | 0.360 | 0.456 |
 | k_3 | 0.324 | 0.409 |
-| filtered_meta | 0.400 | 0.509 |
 | hybrid | 0.294 | 0.379 |
+| filtered_meta | 0.400 | 0.509 |
+| rerank_filtered | 0.409 | 0.516 |
+| prompt_derive | 0.360 | 0.456 |
 
 ## Reference run by question type (answerable)
 
