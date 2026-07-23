@@ -244,6 +244,11 @@ def run_one(exp: Dict[str, Any], base: Dict[str, Any], qa: Dict[str, Any],
         from src.retrieval.metadata_filter import load_company_list, filtered_search
         companies = load_company_list("data/financebench_document_information.jsonl")
         retrieved = [filtered_search(store, q, emb, k, companies) for q in qa["questions"]]
+    elif exp.get("hybrid"):
+        from src.retrieval.hybrid import build_bm25, hybrid_search
+        logger.info("Building BM25 index for hybrid retrieval")
+        bm25 = build_bm25(store)
+        retrieved = [hybrid_search(store, bm25, q, emb, k) for q in qa["questions"]]
     else:
         retrieved = [search_index(vector_store=store, query=q, embedding_model=emb, k=k)
                      for q in qa["questions"]]

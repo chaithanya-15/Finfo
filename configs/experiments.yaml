@@ -73,3 +73,10 @@ experiments:
     generate: false
     metadata_filter: true
     overrides: {}
+
+  - name: hybrid
+    axis: retrieval_filter
+    note: reference retrieval fused with BM25 lexical search (RRF)
+    generate: false
+    hybrid: true
+    overrides: {}
