@@ -468,11 +468,9 @@ def process_all_documents(document_info_path: str = "data/financebench_document_
 
     for _, doc_info in docs_df.iterrows():
         doc_name = doc_info['doc_name']
-        print(f"\nProcessing document: {doc_name}")
 
         doc_results = {}
         for strategy in chunk_strategies:
-            print(f"  Using strategy: {strategy}")
             chunks = process_document(
                 doc_info.to_dict(),
                 pdf_dir=pdf_dir,

@@ -55,7 +55,7 @@ def example_retrieval_setup():
                 batch_size=2
             )
 
-            print("Index built successfully!")
+            print("Index built")
 
             # Example search
             results = search_index(
@@ -110,7 +110,7 @@ def example_evaluation():
     from evaluate import RAGEvaluator
 
     evaluator = RAGEvaluator()
-    print("Evaluator created successfully!")
+    print("Evaluator created")
     print("To use it:")
     print("  results, aggregated = evaluator.run_evaluation_pipeline(")
     print("      questions, answers, evidence, retrieved_chunks)")
@@ -128,7 +128,7 @@ def main():
     example_evaluation()
 
     print("=" * 50)
-    print("Examples completed!")
+    print("Examples completed")
     print("See the individual module files for detailed usage.")
 
 if __name__ == "__main__":

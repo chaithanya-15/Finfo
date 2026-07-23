@@ -40,7 +40,7 @@ def check_packages(required_packages):
         print("Install with: uv pip install " + " ".join(missing))
         return False
     else:
-        print("\nAll required packages installed!")
+        print("\nAll required packages installed")
         return True
 
 def check_gpu():
@@ -106,7 +106,7 @@ def check_data_files():
         print("Please ensure the FinanceBench dataset is downloaded.")
         return False
     else:
-        print("\nAll required data files present!")
+        print("\nAll required data files present")
         return True
 
 def check_directory_structure():
@@ -135,7 +135,7 @@ def check_directory_structure():
         print(f"\nMissing directories: {', '.join(missing_dirs)}")
         return False
     else:
-        print("\nDirectory structure OK!")
+        print("\nDirectory structure OK")
         return True
 
 def test_imports():
@@ -166,7 +166,7 @@ def test_imports():
             print(f"  {module}: {error}")
         return False
     else:
-        print("\nAll modules imported successfully!")
+        print("\nAll modules imported")
         return True
 
 def main():

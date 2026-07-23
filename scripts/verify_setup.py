@@ -150,7 +150,7 @@ def main():
 
     print("\n" + "=" * 50)
     if all(results):
-        print("🎉 All checks passed! The project is ready to use.")
+        print("All checks passed. The project is ready to use.")
         print("\nNext steps:")
         print("1. Obtain the FinanceBench dataset files")
         print("2. Run: python run_pipeline.py --step all")

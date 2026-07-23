@@ -749,10 +749,3 @@ def create_evaluation_pipeline() -> RAGEvaluator:
     return RAGEvaluator()
 
 
-if __name__ == "__main__":
-    # Example usage
-    evaluator = RAGEvaluator()
-    print("RAG Evaluator initialized")
-    print("To use:")
-    print("  results, aggregated = evaluator.run_evaluation_pipeline(questions, answers, evidence, retrieved_chunks)")
-    print("  evaluator.save_results(results, aggregated)")
