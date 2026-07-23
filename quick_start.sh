@@ -69,12 +69,11 @@ fi
 # Change to script directory
 cd "$(dirname "$0")"
 
-# Create virtual environment with Python 3.14 if doesn't exist
+# Create virtual environment with Python 3.12 if it doesn't exist
 if [ ! -d ".venv" ]; then
-    echo "Creating virtual environment with Python 3.14..."
-    uv python install 3.14 3.14..."
-    uv python install 3.14
-    uv venv --python 3.14
+    echo "Creating virtual environment with Python 3.12..."
+    uv python install 3.12
+    uv venv --python 3.12
 fi
 
 # Activate virtual environment
@@ -130,7 +129,7 @@ echo "= QUICK START COMPLETE!"
 echo "================================================================================"
 echo
 echo "Results are available in the 'results/' directory."
-echo "To run the full evaluation, remove the --max_examples limit in the config."
+echo "To run the full ablation, use: python run_experiments.py"
 echo
 echo "Next steps:"
 echo "1. Review results in results/"
