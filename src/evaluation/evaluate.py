@@ -50,6 +50,41 @@ def json_safe(obj: Any) -> Any:
     return obj
 
 
+# Refusals in the model's own words, not just the wording it was told to use. Instructed to
+# reply "Not enough information in the provided context", it often declines some other way
+# ("The provided excerpts do not contain specific figures for..."). Matching only the exact
+# string undercounts refusals, which made a prompt change look like it had reduced abstention
+# when it had only rephrased it.
+_REFUSAL_PATTERN = re.compile(
+    r"not enough information"
+    r"|do(?:es)? not (?:contain|provide|specify|include|state|identify|disclose)"
+    r"|no (?:specific )?(?:information|figures?|data|mention|details)"
+    r"|not (?:stated|provided|specified|available|disclosed|mentioned) (?:in|within|by)"
+    r"|cannot (?:be )?(?:determined|calculated|answered?)",
+    re.IGNORECASE,
+)
+
+
+def is_refusal(answer: str) -> bool:
+    """
+    Whether an answer declines to answer, however it is worded.
+
+    Only the opening sentence is examined. A refusal is how an answer starts; the same wording
+    later in a reply is usually a caveat attached to a real answer ("Revenue was $5,412 million
+    [X_c12]. The excerpts do not contain the FY2019 comparison."), which should not count.
+
+    Args:
+        answer: Generated answer text
+
+    Returns:
+        True if the answer opens by declining
+    """
+    if not answer:
+        return False
+    opening = re.split(r'(?<=[.!?])\s', str(answer).strip(), maxsplit=1)[0]
+    return bool(_REFUSAL_PATTERN.search(opening))
+
+
 _EVIDENCE_STOPWORDS = set(
     "the a an and or but in on at to for of with by is are was were be as from that this it "
     "its their his her our your they we you i he she has have had will would can could".split()
@@ -174,7 +209,10 @@ class RetrievalEvaluator:
             if chunk_relevant:
                 relevant_count += 1
 
-        return relevant_count / len(top_k_chunks)
+        # Divide by k, not by how many chunks came back. A run that retrieves 5 passages has a
+        # precision@10 of at most 0.5 by definition; dividing by 5 reported it as if 10 had been
+        # examined, which doubled the score.
+        return relevant_count / k
 
     @staticmethod
     def calculate_mrr(retrieved_chunks: List[Dict[str, Any]],
@@ -270,6 +308,87 @@ class GenerationEvaluator:
         except Exception as e:
             logger.error(f"Error calculating semantic similarity: {e}")
             return 0.0
+
+    @staticmethod
+    def _figures(text: str) -> List[float]:
+        """
+        Comparable numeric values in free text, handling $ , % ( ) and negatives.
+
+        Citation tags are stripped first, and a figure whose digits touch a letter is skipped so
+        that 3M, 10K, FY2016 and c367 are not read as quantities. The letter test anchors on the
+        first digit because the pattern may absorb a leading "$", "(" or space.
+
+        Args:
+            text: Any answer or reference string
+
+        Returns:
+            The figures found, in order of appearance
+        """
+        text = re.sub(r'\[[^\]]*\]', ' ', str(text))
+        out = []
+        for m in re.finditer(r'[-+]?\$?\s?\(?\d[\d,]*\.?\d*\)?%?', text):
+            raw = m.group()
+            first_digit = next((i for i, ch in enumerate(raw) if ch.isdigit()), None)
+            if first_digit is None:
+                continue
+            d = m.start() + first_digit
+            before = text[d - 1] if d > 0 else " "
+            after = text[m.end()] if m.end() < len(text) else " "
+            if before.isalpha() or after.isalpha():
+                continue
+            neg = "(" in raw or raw.lstrip().startswith("-")
+            s = re.sub(r'[^\d.]', '', raw).strip('.')
+            if not s:
+                continue
+            try:
+                value = float(s)
+            except ValueError:
+                continue
+            out.append(-value if neg else value)
+        return out
+
+    def calculate_numeric_agreement(self, generated_text: str, reference_text: str,
+                                    rel_tol: float = 0.005) -> Optional[float]:
+        """
+        Whether a figure from the reference answer appears in the generated answer.
+
+        ROUGE-L cannot score these questions: FinanceBench answers are frequently bare figures
+        such as "$1577.00", so a correct answer written as a sentence scores near zero on word
+        overlap. This compares the figures instead.
+
+        Fiscal years are dropped from both sides, since nearly every question and answer names
+        one and leaving them in matches "FY2023" against "FY2023" and scores a wrong answer as
+        correct. The tolerance is tight for the same reason: a loose one lets the 31 in
+        "December 31" match a reference value of 30.8. A 1000x difference is accepted, because
+        filings quote millions and answers sometimes restate in billions.
+
+        Args:
+            generated_text: Generated answer text
+            reference_text: Ground truth answer text
+            rel_tol: Relative tolerance for a match
+
+        Returns:
+            1.0 on agreement, 0.0 on disagreement, or None when the reference answer carries no
+            figure and the question is therefore not scorable this way
+        """
+        def not_year(v):
+            return not (float(v).is_integer() and 1900 <= v <= 2100)
+
+        gold = [v for v in self._figures(reference_text) if not_year(v)]
+        gen = [v for v in self._figures(generated_text) if not_year(v)]
+        if not gold:
+            return None
+        if not gen:
+            return 0.0
+        for a in gold:
+            for b in gen:
+                denom = max(abs(a), 1e-9)
+                if a == b or abs(a - b) / denom <= rel_tol:
+                    return 1.0
+                for scale in (1000.0, 0.001, 1e6, 1e-6):
+                    if abs(a - b * scale) / denom <= rel_tol:
+                        return 1.0
+        return 0.0
 
     def calculate_exact_match(self, generated_text: str,
                               reference_text: str) -> float:
@@ -412,10 +531,14 @@ class CitationEvaluator:
             if text and len(text) > 10:  # Only consider substantial text chunks
                 # Check if any significant portion of the chunk appears in answer
                 # Simple approach: check if some keywords from chunk are in answer
-                words = set(text.split())
-                # Filter out very common words
+                # Keep the chunk's own word order and drop repeats. Building the list from a
+                # set instead made this metric non-deterministic: Python randomises string
+                # hashing per process, so "the first five keywords" was a different five on
+                # every run and the same answer scored differently each time. That drift was
+                # previously mistaken for the llama.cpp Metal backend being irreproducible.
                 stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
-                keywords = [w for w in words if len(w) > 3 and w not in stop_words]
+                keywords = [w for w in dict.fromkeys(text.split())
+                            if len(w) > 3 and w not in stop_words]
 
                 if keywords:
                     # Check if at least some keywords appear in answer
@@ -500,6 +623,11 @@ class RAGEvaluator:
         metrics["exact_match"] = self.generation_evaluator.calculate_exact_match(
             answer, ground_truth_answer
         )
+        # None on questions whose reference answer holds no figure, so they are excluded from the
+        # mean rather than counted as failures.
+        metrics["numeric_agreement"] = self.generation_evaluator.calculate_numeric_agreement(
+            answer, ground_truth_answer
+        )
 
         # Semantic similarity (optional, can be slow)
         try:
@@ -521,16 +649,9 @@ class RAGEvaluator:
             answer, retrieved_chunks
         )
 
-        # Flag an abstention. The generator is instructed to reply exactly "Not enough
-        # information in the provided context"; the extra phrases catch close variants.
-        refusal_phrases = [
-            "not enough information in the provided context",
-            "not enough information",
-            "cannot answer",
-        ]
-        metrics["has_refusal"] = any(
-            phrase in answer.lower() for phrase in refusal_phrases
-        )
+        # Flag an abstention, counting refusals phrased in the model's own words as well as the
+        # exact string it was told to use. See is_refusal.
+        metrics["has_refusal"] = is_refusal(answer)
 
         return metrics
 
@@ -590,23 +711,32 @@ class RAGEvaluator:
         if not results:
             return {}
 
-        # Get all metric keys (excluding non-numeric ones)
+        # Collect metric keys across every result, not just the first. Some metrics are undefined
+        # for some questions and report None: numeric agreement cannot score a question whose gold
+        # answer holds no figure. Sampling only results[0] made the whole metric appear or vanish
+        # depending on which question happened to come first, and mixing a None into the mean
+        # aborted the run outright.
         numeric_keys = []
-        sample = results[0]
-        for key, value in sample.items():
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                numeric_keys.append(key)
+        for r in results:
+            for key, value in r.items():
+                if key not in numeric_keys and isinstance(value, (int, float)) \
+                        and not isinstance(value, bool):
+                    numeric_keys.append(key)
 
-        # Calculate mean and std for each numeric metric
         aggregated = {}
         for key in numeric_keys:
-            values = [r.get(key, 0.0) for r in results if key in r]
+            values = [r[key] for r in results
+                      if isinstance(r.get(key), (int, float)) and not isinstance(r.get(key), bool)]
             if values:
                 aggregated[f"{key}_mean"] = np.mean(values)
                 aggregated[f"{key}_std"] = np.std(values)
                 aggregated[f"{key}_median"] = np.median(values)
                 aggregated[f"{key}_min"] = np.min(values)
                 aggregated[f"{key}_max"] = np.max(values)
+                # Record the denominator when a metric skipped questions, so a mean over a subset
+                # is never mistaken for a mean over the whole run.
+                if len(values) < len(results):
+                    aggregated[f"{key}_n"] = len(values)
 
         # Add count
         aggregated["num_examples"] = len(results)

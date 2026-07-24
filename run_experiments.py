@@ -43,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.data_processing.ingest import process_document
 from src.retrieval.retrieve import build_index, load_index, search_index, load_chunks_from_directory
-from src.evaluation.evaluate import create_evaluation_pipeline, json_safe
+from src.evaluation.evaluate import create_evaluation_pipeline, json_safe, is_refusal
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -240,7 +240,19 @@ def run_one(exp: Dict[str, Any], base: Dict[str, Any], qa: Dict[str, Any],
 
     logger.info(f"Retrieving top-{k} for {len(qa['questions'])} questions")
     emb = config["retrieval"]["embedding_model"]
-    if exp.get("metadata_filter"):
+    if exp.get("rerank"):
+        from src.retrieval.rerank import build_reranker, rerank_search
+        pool = exp.get("pool", 50)
+        companies = None
+        if exp.get("metadata_filter"):
+            from src.retrieval.metadata_filter import load_company_list
+            companies = load_company_list("data/financebench_document_information.jsonl")
+        logger.info(f"Reranking a pool of {pool} with {exp.get('reranker', 'BAAI/bge-reranker-base')}")
+        reranker = build_reranker(exp.get("reranker", "BAAI/bge-reranker-base"))
+        retrieved = [rerank_search(store, reranker, q, emb, k, pool=pool, companies=companies)
+                     for q in qa["questions"]]
+        del reranker
+    elif exp.get("metadata_filter"):
         from src.retrieval.metadata_filter import load_company_list, filtered_search
         companies = load_company_list("data/financebench_document_information.jsonl")
         retrieved = [filtered_search(store, q, emb, k, companies) for q in qa["questions"]]
@@ -260,7 +272,8 @@ def run_one(exp: Dict[str, Any], base: Dict[str, Any], qa: Dict[str, Any],
         gen_cfg = config["generation"]
         model = create_qa_pipeline(model_name=gen_cfg["model_name"],
                                    device=gen_cfg.get("device", "auto"),
-                                   load_in_4bit=gen_cfg.get("load_in_4bit", True))
+                                   load_in_4bit=gen_cfg.get("load_in_4bit", True),
+                                   system_prompt=exp.get("prompt", "default"))
         kwargs = gen_cfg.get("generation_kwargs", {})
         generated, dropped, abstained = [], 0, 0
         t = time.time()
@@ -268,7 +281,7 @@ def run_one(exp: Dict[str, Any], base: Dict[str, Any], qa: Dict[str, Any],
             result = model.answer_question(q, ctx, **kwargs)
             generated.append(result["answer"])
             dropped += result["dropped_contexts"]
-            if result["answer"].lower().startswith("not enough information"):
+            if is_refusal(result["answer"]):
                 abstained += 1
             if i % 25 == 0:
                 rate = i / (time.time() - t)
@@ -283,10 +296,18 @@ def run_one(exp: Dict[str, Any], base: Dict[str, Any], qa: Dict[str, Any],
     run_dir = Path(out_root, name)
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    # Record the retrieval and prompt variant too, so a row in comparison.csv says what produced
+    # it. Without these, prompt_derive and baseline differ only by name.
     summary = {"experiment": name, "axis": exp.get("axis"), "note": exp.get("note"),
                "chunk_strategy": strategy, "k": k,
                "embedding_model": config["retrieval"]["embedding_model"],
                "generation_model": config["generation"]["model_name"] if exp.get("generate") else None,
+               "prompt": exp.get("prompt", "default") if exp.get("generate") else None,
+               "retrieval_mode": ("rerank" if exp.get("rerank") else
+                                  "hybrid" if exp.get("hybrid") else
+                                  "filtered" if exp.get("metadata_filter") else "dense"),
+               "metadata_filter": bool(exp.get("metadata_filter")),
+               "rerank_pool": exp.get("pool") if exp.get("rerank") else None,
                **gen_stats}
 
     evaluator = create_evaluation_pipeline()

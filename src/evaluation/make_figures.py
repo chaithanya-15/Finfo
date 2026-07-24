@@ -35,9 +35,11 @@ GREEN = "#009E73"     # third category / "good"
 VERMILLION = "#D55E00"  # contrast / "miss"
 SKY = "#56B4E9"       # fourth category
 PURPLE = "#CC79A7"    # fifth category
+GREY = "#7a7a7a"      # sixth category
 AXIS_COLOR = {"chunk_size": ORANGE, "embedding_model": GREEN,
               "retrieval_k": SKY, "generation_model": PURPLE, "reference": BLUE,
-              "retrieval_filter": VERMILLION}
+              "retrieval_filter": VERMILLION, "reranking": "#117733",
+              "prompting": GREY}
 
 RETRIEVAL_METRICS = ["recall@1", "recall@5", "recall@10", "mrr"]
 
@@ -121,13 +123,20 @@ def fig_retrieval_ablation(df: pd.DataFrame, fig_dir: Path):
     One panel carries the whole retrieval story: which single change helps or hurts, with the
     reference configuration marked as the point of comparison.
     """
-    order = ["chunk_256", "embed_minilm", "k_3", "baseline", "k_10", "chunk_structure",
-             "hybrid", "filtered_meta"]
-    sub = df.set_index("experiment").reindex([o for o in order if o in df["experiment"].values])
+    order = ["chunk_256", "embed_minilm", "k_3", "baseline", "prompt_derive", "k_10",
+             "chunk_structure", "hybrid", "rerank", "filtered_meta", "rerank_filtered"]
+    # Anything not named above still gets plotted, at the end. The list sets the reading order;
+    # it must not decide which arms appear, or a new arm would go missing from a figure captioned
+    # as the whole ablation.
+    known = [o for o in order if o in df["experiment"].values]
+    extra = [e for e in df["experiment"].values if e not in order]
+    sub = df.set_index("experiment").reindex(known + extra)
     labels = {"chunk_256": "256-tok chunks", "baseline": "512-tok (reference)",
               "chunk_structure": "structure-aware", "embed_minilm": "MiniLM embed",
               "k_3": "k=3", "k_10": "k=10", "filtered_meta": "company filter",
-              "hybrid": "dense+BM25"}
+              "hybrid": "dense+BM25", "rerank_filtered": "filter+rerank",
+              "rerank": "rerank only", "prompt_derive": "derive prompt",
+              "gen_gemma": "gemma-12B"}
     vals = sub["answerable.recall@5_mean"].values
     colors = [AXIS_COLOR.get(a, BLUE) for a in sub["axis"].values]
 
@@ -144,14 +153,15 @@ def fig_retrieval_ablation(df: pd.DataFrame, fig_dir: Path):
     ax.set_xticklabels([labels.get(i, i) for i in sub.index], rotation=18, ha="right")
     ax.set_ylabel("Recall@5 (answerable)")
     ax.set_ylim(0, max(vals) * 1.28)
-    ax.set_title("Retrieval: filtering to the questioned company beats every chunking or k change")
+    ax.set_title("Retrieval: company filtering and reranking beat every chunking or k change")
     ax.grid(axis="x", visible=False)
     _despine(ax)
     # legend by axis, placed over the short leftmost bar to avoid the taller bars' labels
     from matplotlib.patches import Patch
     seen = dict(zip(sub["axis"], colors))
     legend = [Patch(facecolor=AXIS_COLOR[a], label=a.replace("_", " "))
-              for a in ["reference", "chunk_size", "embedding_model", "retrieval_k", "retrieval_filter"] if a in seen]
+              for a in ["reference", "chunk_size", "embedding_model", "retrieval_k",
+                        "retrieval_filter", "reranking", "prompting"] if a in seen]
     ax.legend(handles=legend, loc="upper left", frameon=False, fontsize=9.5, ncol=2)
     fig.tight_layout()
     fig.savefig(fig_dir / "retrieval_ablation.png", bbox_inches="tight")
@@ -189,10 +199,17 @@ def fig_recall_curves(df: pd.DataFrame, fig_dir: Path):
 
 def fig_answerable_gap(df: pd.DataFrame, fig_dir: Path):
     """Paired Recall@5 over all 150 questions versus the 114 answerable, per configuration."""
-    order = ["baseline", "chunk_structure", "chunk_256", "embed_minilm", "k_3", "k_10"]
-    sub = df.set_index("experiment").reindex([o for o in order if o in df["experiment"].values])
+    order = ["baseline", "chunk_structure", "chunk_256", "embed_minilm", "k_3", "k_10",
+             "hybrid", "rerank", "filtered_meta", "rerank_filtered", "prompt_derive",
+             "gen_gemma"]
+    known = [o for o in order if o in df["experiment"].values]
+    extra = [e for e in df["experiment"].values if e not in order]
+    sub = df.set_index("experiment").reindex(known + extra)
     labels = {"baseline": "reference", "chunk_structure": "structure", "chunk_256": "256-tok",
-              "embed_minilm": "MiniLM", "k_3": "k=3", "k_10": "k=10"}
+              "embed_minilm": "MiniLM", "k_3": "k=3", "k_10": "k=10", "hybrid": "dense+BM25",
+              "rerank": "rerank only", "filtered_meta": "company filter",
+              "rerank_filtered": "filter+rerank", "prompt_derive": "derive prompt",
+              "gen_gemma": "gemma-12B"}
     all_v = sub["all.recall@5_mean"].values
     ans_v = sub["answerable.recall@5_mean"].values
 
@@ -209,7 +226,7 @@ def fig_answerable_gap(df: pd.DataFrame, fig_dir: Path):
         ax.text(xi, v + 0.006, f"{v:.2f}", ha="center", va="bottom", fontsize=9,
                 color=BLUE, fontweight="bold")
     ax.set_xticks(x)
-    ax.set_xticklabels([labels.get(i, i) for i in sub.index])
+    ax.set_xticklabels([labels.get(i, i) for i in sub.index], rotation=18, ha="right")
     ax.set_ylabel("Recall@5")
     ax.set_ylim(0, max(ans_v) * 1.25)
     ax.set_title("The missing documents, not the model, hold down the full-set scores")
@@ -399,7 +416,10 @@ def write_summary(df: pd.DataFrame, root: Path):
     lines += ["## Retrieval (answerable subset)", "",
               markdown_table(df.sort_values("answerable.recall@5_mean", ascending=False),
                              list(ren)[:2] + ["answerable.recall@1_mean", "answerable.recall@5_mean",
-                             "answerable.recall@10_mean", "answerable.mrr_mean"], ren), ""]
+                             "answerable.recall@10_mean", "answerable.mrr_mean"], ren), "",
+              "R@10 equals R@5 for every run that retrieves five passages, since there is no",
+              "sixth to tenth result to find the evidence in. Only `k_10` retrieves ten, so it",
+              "is the only row where the two columns can differ.", ""]
 
     gen = df[df["generation_model"].notna()]
     if not gen.empty:
