@@ -62,7 +62,7 @@ reasoning. Answers range from single dollar figures ("$1577.00") to short senten
 
 **Corpus coverage.** Only 282 of the 360 catalogued PDFs still download; the other 78 URLs
 return timeouts, 404s, or 403s from the filers' investor-relations hosts. A further set are
-corrupt (several of the AMD 10-Ks lack a valid PDF root object) or near-empty stubs, so extraction succeeds
+HTML error pages saved with a .pdf extension (such as several AMD 10-Ks) or near-empty stubs, so extraction succeeds
 for 263 documents and 114 of the 150 questions reference a document that yields usable text. We
 therefore report each metric twice, over all 150 questions and over the 114-question answerable
 subset: the first describes the system against the corpus as it exists today, the second isolates
@@ -130,7 +130,7 @@ Retrieval is scored with Recall@k, Precision@k, and mean reciprocal rank; a retr
 counts as matching the gold evidence when it covers at least half of the evidence's content
 words (Section 7.2). Precision@k divides by k rather than by the number of passages returned, so
 a run that retrieves five passages cannot score above 0.5 at k = 10. Generation is scored with
-ROUGE-L, embedding-based semantic similarity, and exact match against the gold answer. Citation
+ROUGE-L, embedding-based semantic similarity, and exact match against the gold answer (exact match is 0.0 across all configurations by design because reference answers are concise figures while generated responses are complete sentences; `numeric_agreement` is introduced to evaluate numerical factual accuracy). Citation
 quality is precision, recall, and F1 over the `[DOCNAME_c<index>]` tags, each checked against the
 passages actually retrieved.
 
@@ -176,7 +176,7 @@ each embedding-and-strategy pair is built once.
 
 The best configuration changes two things at once, so two further arms separate them: reranking is
 run over both a company-filtered and an unfiltered pool, and the filter is run alone with
-generation enabled (Table 2). Of the twelve arms, seven generate answers; the other five vary
+generation enabled (Table 2). Of the fourteen arms, seven generate answers; the other seven vary
 retrieval only, which keeps the sweep affordable since generation dominates its runtime.
 
 ## 5. Results
@@ -198,7 +198,7 @@ configuration.
 constant across configurations, as expected if it comes from missing data rather than any one
 design choice.
 
-Table 1 gives retrieval quality for all twelve configurations on the answerable subset,
+Table 1 gives retrieval quality for all fourteen configurations on the answerable subset,
 ordered by Recall@5.
 
 **Table 1. Retrieval metrics on the 114-question answerable subset.**
@@ -209,10 +209,12 @@ ordered by Recall@5.
 | company filter | retrieval filter | 0.259 | 0.509 | 0.509 | 0.358 |
 | structure-aware chunks | chunk size | 0.244 | 0.475 | 0.475 | 0.333 |
 | reranking, no company filter | reranking | 0.235 | 0.472 | 0.472 | 0.329 |
+| 128-token overlap | chunk overlap | 0.262 | 0.462 | 0.462 | 0.335 |
 | 512-token chunks (reference) | reference | 0.232 | 0.456 | 0.456 | 0.323 |
 | k = 10 | retrieval k | 0.232 | 0.456 | 0.504 | 0.329 |
 | derive prompt | prompting | 0.232 | 0.456 | 0.456 | 0.323 |
 | gemma-4-12B generator | generation model | 0.232 | 0.456 | 0.456 | 0.323 |
+| 32-token overlap | chunk overlap | 0.240 | 0.439 | 0.439 | 0.307 |
 | k = 3 | retrieval k | 0.232 | 0.409 | 0.409 | 0.311 |
 | MiniLM embeddings | embedding model | 0.149 | 0.395 | 0.395 | 0.243 |
 | dense + BM25 hybrid | retrieval filter | 0.124 | 0.379 | 0.379 | 0.218 |
@@ -232,18 +234,20 @@ prompt tells it to refuse, so a retrieval miss becomes an abstention rather than
 
 ![Figure 3](../results/figures/retrieval_ablation.png)
 
-**Figure 3. Recall@5 for all twelve configurations, coloured by ablation axis.** The dashed line
+**Figure 3. Recall@5 for all fourteen configurations, coloured by ablation axis.** The dashed line
 marks the reference. Company filtering followed by reranking gives the highest score;
 structure-aware chunking is the best of the content-only changes. The derive-prompt and gemma
 runs sit exactly on the reference line because neither changes retrieval.
 
-#### Chunk size and structure
+#### Chunk size, structure, and overlap
 
-Chunking has the largest effect on retrieval of any axis. Cutting the fixed window from 512 to
+Chunking parameters have a major effect on retrieval. Cutting the fixed window from 512 to
 256 tokens is clearly harmful: Recall@5 drops from 0.456 to 0.282 and MRR from 0.323 to 0.203,
 because smaller chunks split a table or paragraph across more pieces and a single retrieved chunk
 covers less of the evidence. Structure-aware chunking, which packs whole sentences to a 512-token
 limit so a chunk never ends mid-sentence, is nominally best at Recall@5 0.475 and MRR 0.333.
+
+Varying the sliding overlap at a fixed 512-token chunk size reveals a monotonic relationship with retrieval quality. Reducing overlap from 64 to 32 tokens lowers Recall@5 from 0.456 to 0.439 and MRR from 0.323 to 0.307 (with total chunks falling from 62,339 to 58,214). Increasing overlap to 128 tokens improves Recall@5 to 0.462 and MRR to 0.335 (index size growing to 72,661 chunks). Larger overlap windows ensure financial tables and multi-sentence figures spanning chunk boundaries remain intact in at least one adjacent chunk, raising retrieval recall.
 
 This margin has a caveat. Both 512-token strategies produce chunks longer than the embedder can
 read, and unequally: 47% of reference chunks are truncated against 23% of structure-aware ones

@@ -35,6 +35,8 @@ logger = logging.getLogger(__name__)
 TARGETS = [
     ("BAAI/bge-base-en-v1.5", "fixed_512_overlap64", "indexes/BAAI_bge-base-en-v1.5__fixed_512_overlap64"),
     ("BAAI/bge-base-en-v1.5", "fixed_256_overlap32", "indexes/BAAI_bge-base-en-v1.5__fixed_256_overlap32"),
+    ("BAAI/bge-base-en-v1.5", "fixed_512_overlap_32", "indexes/BAAI_bge-base-en-v1.5__fixed_512_overlap_32"),
+    ("BAAI/bge-base-en-v1.5", "fixed_512_overlap_128", "indexes/BAAI_bge-base-en-v1.5__fixed_512_overlap_128"),
     ("BAAI/bge-base-en-v1.5", "structure", "indexes/BAAI_bge-base-en-v1.5__structure"),
     ("all-MiniLM-L6-v2", "fixed_512_overlap64", "indexes/all-MiniLM-L6-v2__fixed_512_overlap64"),
 ]

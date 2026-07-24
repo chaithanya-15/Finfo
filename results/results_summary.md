@@ -11,10 +11,12 @@ answerable subset (documents that yield usable text); the full set is 150.
 | filtered_meta | retrieval_filter | 0.259 | 0.509 | 0.509 | 0.358 |
 | chunk_structure | chunk_size | 0.244 | 0.475 | 0.475 | 0.333 |
 | rerank | reranking | 0.235 | 0.472 | 0.472 | 0.329 |
+| overlap_128 | chunk_overlap | 0.262 | 0.462 | 0.462 | 0.335 |
 | baseline | reference | 0.232 | 0.456 | 0.456 | 0.323 |
 | gen_gemma | generation_model | 0.232 | 0.456 | 0.456 | 0.323 |
 | k_10 | retrieval_k | 0.232 | 0.456 | 0.504 | 0.329 |
 | prompt_derive | prompting | 0.232 | 0.456 | 0.456 | 0.323 |
+| overlap_32 | chunk_overlap | 0.240 | 0.439 | 0.439 | 0.307 |
 | k_3 | retrieval_k | 0.232 | 0.409 | 0.409 | 0.311 |
 | embed_minilm | embedding_model | 0.149 | 0.395 | 0.395 | 0.243 |
 | hybrid | retrieval_filter | 0.124 | 0.379 | 0.379 | 0.218 |
@@ -52,6 +54,8 @@ is the only row where the two columns can differ.
 | prompt_derive | 0.360 | 0.456 |
 | rerank | 0.376 | 0.472 |
 | rerank_filtered | 0.409 | 0.516 |
+| overlap_32 | 0.347 | 0.439 |
+| overlap_128 | 0.368 | 0.462 |
 
 ## Reference run by question type (answerable)
 

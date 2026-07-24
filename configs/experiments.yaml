@@ -113,3 +113,20 @@ experiments:
     metadata_filter: true
     pool: 50
     overrides: {}
+
+  - name: overlap_32
+    axis: chunk_overlap
+    note: 512-token chunks with 32-token overlap, isolates overlap from size
+    generate: false
+    overrides:
+      corpus_processing:
+        chunk_strategies: ["fixed_512_overlap_32"]
+
+  - name: overlap_128
+    axis: chunk_overlap
+    note: 512-token chunks with 128-token overlap
+    generate: false
+    overrides:
+      corpus_processing:
+        chunk_strategies: ["fixed_512_overlap_128"]
+
