@@ -209,7 +209,10 @@ class RetrievalEvaluator:
             if chunk_relevant:
                 relevant_count += 1
 
-        return relevant_count / len(top_k_chunks)
+        # Divide by k, not by how many chunks came back. A run that retrieves 5 passages has a
+        # precision@10 of at most 0.5 by definition; dividing by 5 reported it as if 10 had been
+        # examined, which doubled the score.
+        return relevant_count / k
 
     @staticmethod
     def calculate_mrr(retrieved_chunks: List[Dict[str, Any]],
@@ -708,23 +711,32 @@ class RAGEvaluator:
         if not results:
             return {}
 
-        # Get all metric keys (excluding non-numeric ones)
+        # Collect metric keys across every result, not just the first. Some metrics are undefined
+        # for some questions and report None: numeric agreement cannot score a question whose gold
+        # answer holds no figure. Sampling only results[0] made the whole metric appear or vanish
+        # depending on which question happened to come first, and mixing a None into the mean
+        # aborted the run outright.
         numeric_keys = []
-        sample = results[0]
-        for key, value in sample.items():
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                numeric_keys.append(key)
+        for r in results:
+            for key, value in r.items():
+                if key not in numeric_keys and isinstance(value, (int, float)) \
+                        and not isinstance(value, bool):
+                    numeric_keys.append(key)
 
-        # Calculate mean and std for each numeric metric
         aggregated = {}
         for key in numeric_keys:
-            values = [r.get(key, 0.0) for r in results if key in r]
+            values = [r[key] for r in results
+                      if isinstance(r.get(key), (int, float)) and not isinstance(r.get(key), bool)]
             if values:
                 aggregated[f"{key}_mean"] = np.mean(values)
                 aggregated[f"{key}_std"] = np.std(values)
                 aggregated[f"{key}_median"] = np.median(values)
                 aggregated[f"{key}_min"] = np.min(values)
                 aggregated[f"{key}_max"] = np.max(values)
+                # Record the denominator when a metric skipped questions, so a mean over a subset
+                # is never mistaken for a mean over the whole run.
+                if len(values) < len(results):
+                    aggregated[f"{key}_n"] = len(values)
 
         # Add count
         aggregated["num_examples"] = len(results)
