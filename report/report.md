@@ -5,7 +5,7 @@ Karthik Reddy Changal, Chaithanya Anugu, Nithin Sujith Nair
 ## Abstract
 
 We build and evaluate a retrieval-augmented generation (RAG) pipeline that answers questions about
-SEC filings on free models that run locally, comparing twelve configurations that vary chunking,
+SEC filings on free models that run locally, comparing fourteen configurations that vary chunking,
 retrieval, generation, and prompting one factor at a time. On the 114 questions whose source
 document is available, the best configuration restricts retrieval to the company named in the
 question and reorders a deep pool with a cross-encoder, reaching Recall@5 0.52 against 0.46 for
@@ -42,7 +42,7 @@ to its quirks, and use lexical and semantic overlap plus a citation check.
 
 ### 1.3 Contributions
 
-We ablate seven design decisions one variable at a time and report two findings. Retrieval, not
+We ablate eight design decisions one variable at a time and report two findings. Retrieval, not
 generation, is the binding constraint: the best configuration finds the gold evidence for barely
 half the answerable questions. And the retrieval metric is an unreliable guide to which changes
 help, ranking our two interventions in the opposite order to their effect on answer quality, a
@@ -477,7 +477,7 @@ report, confirming the recomputation reproduced the original retrieval exactly.
 
 ## 8. Conclusion
 
-We built a RAG pipeline for financial filings on free, local models and measured seven design
+We built a RAG pipeline for financial filings on free, local models and measured eight design
 choices on FinanceBench. Retrieval sets the ceiling: the gold evidence reaches the model for
 barely half the answerable questions, and what helped was structure the corpus already carries,
 not a bigger model. Filtering to the company named in the question and reordering a deep pool with
