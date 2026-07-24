@@ -68,7 +68,16 @@ project/
    Qwen3.5-4B is the baseline generator; gemma-4-12B is the second-generator ablation arm.
    An existing LM Studio copy of gemma-4-12B is reused if present.
 
-5. **The FinanceBench metadata** is already in `data/`:
+5. **Fetch the reranker.** The two reranking arms, including the best configuration in the
+   report, score question-and-passage pairs with a cross-encoder:
+   ```bash
+   huggingface-cli download BAAI/bge-reranker-base
+   ```
+   About 1.1 GB. It is loaded through sentence-transformers (already in `requirements.txt`) and
+   runs on the same GPU as the embedder. Only the `rerank` and `rerank_filtered` arms need it;
+   the rest of the sweep runs without it.
+
+6. **The FinanceBench metadata** is already in `data/`:
    `financebench_document_information.jsonl` and `financebench_open_source.jsonl`.
 
 ## Usage
