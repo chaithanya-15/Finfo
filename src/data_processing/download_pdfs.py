@@ -57,9 +57,14 @@ def download_pdf(doc_name: str, url: str, out_dir: str,
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()  # Raise exception for bad status codes
 
+            # Validate that response content is actually a PDF
+            content = response.content
+            if not content.startswith(b"%PDF-") or len(content) < 1024:
+                raise ValueError("Downloaded content is not a valid PDF (missing %PDF- header or too small)")
+
             # Write content to file
             with open(path, "wb") as f:
-                f.write(response.content)
+                f.write(content)
 
             print(f"Successfully downloaded: {path}")
             return path
