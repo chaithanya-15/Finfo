@@ -506,47 +506,48 @@ class CitationEvaluator:
         return valid_count / len(citations)
 
     @staticmethod
-    def citation_recall(answer: str, contexts: List[Dict[str, Any]]) -> float:
+    def citation_recall(answer: str, contexts: List[Dict[str, Any]],
+                        gold_evidence: Optional[List[str]] = None) -> float:
         """
-        Calculate citation recall: proportion of relevant context that is cited.
-        Simplified version: checks if answer contains information from contexts.
+        Calculate citation recall: proportion of relevant context that is cited in the answer.
 
         Args:
             answer: Generated answer text
             contexts: List of retrieved context dictionaries
+            gold_evidence: Optional list of gold evidence strings
 
         Returns:
-            Citation recall score (simplified)
+            Citation recall score
         """
         if not contexts:
             return 0.0
 
-        # Check if answer contains key information from contexts
-        answer_lower = answer.lower()
-        cited_info = 0
-        total_info = len(contexts)
+        citations = set(CitationEvaluator.extract_citations(answer))
+        if not citations:
+            return 0.0
 
-        for ctx in contexts:
-            text = ctx.get('text', '').lower().strip()
-            if text and len(text) > 10:  # Only consider substantial text chunks
-                # Check if any significant portion of the chunk appears in answer
-                # Simple approach: check if some keywords from chunk are in answer
-                # Keep the chunk's own word order and drop repeats. Building the list from a
-                # set instead made this metric non-deterministic: Python randomises string
-                # hashing per process, so "the first five keywords" was a different five on
-                # every run and the same answer scored differently each time. That drift was
-                # previously mistaken for the llama.cpp Metal backend being irreproducible.
-                stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
-                keywords = [w for w in dict.fromkeys(text.split())
-                            if len(w) > 3 and w not in stop_words]
+        # Select relevant contexts (contexts matching gold evidence if provided, else all contexts)
+        relevant_contexts = []
+        if gold_evidence:
+            for ctx in contexts:
+                text = ctx.get('text', '')
+                for ev in gold_evidence:
+                    if evidence_overlap(ev, text) >= 0.5:
+                        relevant_contexts.append(ctx)
+                        break
+        if not relevant_contexts:
+            relevant_contexts = contexts
 
-                if keywords:
-                    # Check if at least some keywords appear in answer
-                    matches = sum(1 for w in keywords[:5] if w in answer_lower)  # Check first 5 keywords
-                    if matches > 0:
-                        cited_info += 1
+        cited_count = 0
+        for ctx in relevant_contexts:
+            doc_name = ctx.get('doc_name', 'unknown')
+            chunk_index = ctx.get('chunk_index')
+            page_number = ctx.get('evidence_page_num', ctx.get('page_number'))
+            if (chunk_index is not None and f"[{doc_name}_c{chunk_index}]" in citations) or \
+               (page_number is not None and f"[{doc_name}_p{page_number}]" in citations):
+                cited_count += 1
 
-        return cited_info / total_info if total_info > 0 else 0.0
+        return cited_count / len(relevant_contexts)
 
     @staticmethod
     def citation_f1(answer: str, contexts: List[Dict[str, Any]]) -> float:
