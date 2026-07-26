@@ -128,7 +128,7 @@ temperature 0.1.
 
 Retrieval is scored with Recall@k, Precision@k, and mean reciprocal rank; a retrieved chunk
 counts as matching the gold evidence when it covers at least half of the evidence's content
-words (Section 7.2). Precision@k divides by k rather than by the number of passages returned, so
+words (Section 7.3). Precision@k divides by k rather than by the number of passages returned, so
 a run that retrieves five passages cannot score above 0.5 at k = 10. Generation is scored with
 ROUGE-L, embedding-based semantic similarity, and exact match against the gold answer (exact match is 0.0 across all configurations by design because reference answers are concise figures while generated responses are complete sentences; `numeric_agreement` is introduced to evaluate numerical factual accuracy). Citation
 quality is precision, recall, and F1 over the `[DOCNAME_c<index>]` tags, each checked against the
@@ -251,7 +251,7 @@ Varying the sliding overlap at a fixed 512-token chunk size reveals a monotonic 
 
 This margin has a caveat. Both 512-token strategies produce chunks longer than the embedder can
 read, and unequally: 47% of reference chunks are truncated against 23% of structure-aware ones
-(Section 7.2). A 0.019 gap is small enough that the difference in indexed
+(Section 7.3). A 0.019 gap is small enough that the difference in indexed
 text could account for it, so we do not claim structure-aware chunking is better on this evidence.
 The 256-token result is unaffected, since those chunks fit the limit.
 
@@ -437,7 +437,49 @@ cannot see reordering, and reordering decides whether the right filing reaches t
 ROUGE-L has the same problem on the generation side, scoring 0.001 wherever the gold answer is a
 bare figure. Both metrics are standard, and both would have picked the wrong change here.
 
-### 7.2 Limitations
+### 7.2 Validating the retrieval metric
+
+Section 7.1 claims Recall@5 ranked our two retrieval changes in the wrong order. That is the
+strongest claim in this report, so we tested it three more times. All three experiments sit
+outside the fourteen-arm ablation and use the same answerable subset and the same index.
+
+The first repeats the reranking comparison with a larger cross-encoder. Swapping
+bge-reranker-base for bge-reranker-large, with the company filter and the pool of 50 held fixed,
+raises Recall@5 from 0.516 to 0.626. Numeric agreement moves from 16 correct of 84 to 17, which a
+McNemar exact test cannot separate from chance (p = 1.00). The disagreement is the same as before
+with its sign reversed: the base cross-encoder gained 0.007 on Recall@5 and doubled the correct
+answers, while the large one gains 0.110 and answers one more question correctly. Ranking the two
+by retrieval score picks the wrong one both times.
+
+The second experiment holds retrieval fixed and changes only the text being scored. Indexing
+128-token chunks and then scoring the 1024-token window centred on each retrieved chunk raises
+Recall@5 from 0.135 to 0.602, though the retrieved chunks are identical. The metric is responding
+to window width.
+
+The third varies chunk size and reports Recall@5 beside the share of questions whose gold filing
+reaches the top five.
+
+**Table 5. Chunk size against two retrieval measures, answerable subset.**
+
+| Chunk size | Chunks | Recall@5 | Gold filing in top 5 |
+| --- | --- | --- | --- |
+| 256 | 124,563 | 0.282 | 0.579 |
+| 512 | 62,339 | 0.456 | 0.535 |
+| 1024 | 31,211 | 0.629 | 0.500 |
+
+The two columns move in opposite directions. Larger chunks retrieve the correct filing less often
+and still score higher on Recall@5, because a wider window clears the 0.5 overlap threshold more
+easily regardless of what it contains. Read alone, the Recall@5 column recommends the chunk size
+that finds the right document least often.
+
+These three results mark where the metric can be trusted. Its threshold is sensitive to chunk
+length independently of retrieval quality, so Recall@5 is usable for comparing arms at a fixed
+chunk size and unsafe across chunk sizes or against a step that only reorders results. That is why
+we report the gold-filing hit rate beside it. This metric is not unusually poor: it is standard,
+as is ROUGE-L, which scores 0.001 wherever the gold answer is a bare figure. Both were the obvious
+choice for this task, and both would have selected the wrong change.
+
+### 7.3 Limitations
 
 Corpus coverage is the largest limitation: a fifth of the filings no longer download and a further
 set are corrupt, so 36 of the 150 questions ask about a document the system never sees. Reporting
