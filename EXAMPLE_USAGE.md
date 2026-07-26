@@ -78,6 +78,35 @@ results, aggregated = evaluator.run_evaluation_pipeline(
 evaluator.save_results(results, aggregated, "results/example_run")
 ```
 
+### Reproducing the best configuration
+
+Step 4 above uses plain dense search, which is the `baseline` arm. The configuration the report
+recommends is `rerank_filtered`: restrict candidates to the company named in the question, then
+reorder a deep pool with a cross-encoder. Both compose, and the filter decides what the
+cross-encoder is allowed to see.
+
+```python
+from src.retrieval.metadata_filter import load_company_list, filtered_search
+from src.retrieval.rerank import build_reranker, rerank_search
+
+companies = load_company_list("data/financebench_document_information.jsonl")
+
+# Company filter alone (the `filtered_meta` arm).
+contexts = filtered_search(store, question, "BAAI/bge-base-en-v1.5", 5, companies)
+
+# Filter plus cross-encoder reranking (the `rerank_filtered` arm, best in the study).
+# Downloads BAAI/bge-reranker-base (~1.1 GB) on first use; see README setup step 5.
+reranker = build_reranker("BAAI/bge-reranker-base")
+contexts = rerank_search(store, reranker, question, "BAAI/bge-base-en-v1.5", k=5,
+                         pool=50, companies=companies)
+
+result = model.answer_question(question, contexts)
+```
+
+Pass `companies=None` to rerank a plain dense pool instead of a company-filtered one. Load the
+reranker before the generator: a cross-encoder on MPS is fine before llama.cpp takes Metal, but
+not after.
+
 ## Configuration
 
 Experiment settings are YAML files in `configs/`. `base_config.yaml` holds the reference
