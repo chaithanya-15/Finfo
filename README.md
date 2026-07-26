@@ -1,8 +1,10 @@
 # FinanceBench RAG Project
 
-This project implements a Retrieval-Augmented Generation (RAG) system for the FinanceBench dataset, following the guidelines from the graded project implementation guide.
+A retrieval-augmented generation (RAG) system that answers questions about SEC filings, built on
+the FinanceBench dataset. Everything runs locally on free models, so there are no API keys
+anywhere. The repository also holds the ablation sweep and the write-up in `report/`.
 
-## Project Structure
+## Project structure
 
 ```
 project/
@@ -163,7 +165,7 @@ and `results/results_summary.md`, and the write-up in `report/report.md`.
 Raw PDFs, vector indexes, and the virtualenv are not tracked. Rebuild the corpus with
 `python -m src.data_processing.download_pdfs`; indexes are rebuilt from the chunks by the sweep.
 
-## Implementation Notes
+## Implementation notes
 
 This implementation follows all constraints from the project brief:
 - Uses only free, locally executable models (via uv and Python 3.12)
