@@ -128,10 +128,21 @@ Experiment configurations are stored in the `configs/` directory as YAML files. 
 ## Evaluation
 
 The evaluation pipeline computes:
-- Retrieval metrics (Recall@k, Precision@k, MRR)
+- Retrieval metrics (Recall@k, Precision@k, MRR). A chunk counts as matching the gold evidence
+  when it contains at least half of the evidence's content words.
 - Generation metrics (ROUGE-L, embedding-based semantic similarity, exact match)
+- Numeric agreement: whether the answer states the correct figure, scored over the questions whose
+  gold answer is a number. Exact match reads 0.0 everywhere because gold answers are bare figures
+  while the model writes sentences, and ROUGE-L reads near zero for the same reason, so this is
+  the metric the report's main result rests on.
+- Abstention rate: how often the model declines to answer, detected from the opening sentence so
+  that refusals phrased in the model's own words still count.
 - Citation validation metrics (precision, recall, F1)
 - Error analysis by question type
+
+Retrieval score and answer quality disagree on this corpus: reranking barely moves Recall@5 while
+roughly doubling the correct figures. Report both, and see section 7.2 of the report before
+selecting a configuration on Recall@k alone.
 
 ## Demo (optional)
 
