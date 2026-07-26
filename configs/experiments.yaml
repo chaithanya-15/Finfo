@@ -114,6 +114,17 @@ experiments:
     pool: 50
     overrides: {}
 
+  - name: rerank_large_filtered
+    axis: reranking
+    note: company-filtered pool of 50 reordered by bge-reranker-large cross-encoder
+    generate: true
+    rerank: true
+    metadata_filter: true
+    pool: 50
+    reranker: BAAI/bge-reranker-large
+    overrides: {}
+
+
   - name: overlap_32
     axis: chunk_overlap
     note: 512-token chunks with 32-token overlap, isolates overlap from size
