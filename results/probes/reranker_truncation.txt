@@ -1,0 +1,13 @@
+# P3: Reranker Sequence Length Truncation & Digit Density Analysis
+
+## 1. Sequence Length Truncation Rate (at pool=50, max_length=512)
+* **Combined (query, passage) pairs exceeding 512 tokens**: 87.11% (4,965 / 5,700 candidate pairs)
+* **Answerable questions with truncated gold evidence chunk**: 81.58% (93 / 114 questions)
+
+## 2. Cross-Encoder Performance by Evidence Digit Density
+* **Median digit count in evidence text**: 219.0 digits
+* **Recall@5 for High Digit Density (>= 219.0 digits)**: 0.4737 (27.0 / 57)
+* **Recall@5 for Low Digit Density (< 219.0 digits)**: 0.5585 (31.8 / 57)
+
+## Analysis
+Sequence truncation is severe: 87.1% of all evaluated pairs and 81.6% of gold evidence chunks are truncated at 512 tokens. Furthermore, high-digit-density passages (financial tables and numerical disclosures) suffer an 8.48 percentage point drop in R@5 compared to lower-digit prose passages (0.4737 vs 0.5585), confirming that truncation strips out critical tail numbers and tabular figures from candidate passages.

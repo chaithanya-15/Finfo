@@ -10,16 +10,15 @@ data/extracted_text/
 indexes/
 *_chroma_db/
 
-# experiment outputs: keep the report-facing summaries, drop the bulky per-question dumps
-results/*
-!results/.gitkeep
-!results/results_summary.md
-!results/figures/
-!results/figures/.gitkeep
-!results/figures/*.png
-!results/experiments/
-results/experiments/*
-!results/experiments/comparison.csv
+# Experiment outputs are tracked. About 3 MB, and they are the evidence behind every number
+# in the report: the per-question dumps the error analysis cites, and the probe outputs
+# behind the retrieval-metric validation. Throwaway smoke and verification runs stay out,
+# as do raw run logs, since neither backs anything the report claims.
+results/test_baseline_run/
+results/experiments_restore*
+results/experiments_tablefix*
+results/experiments/comparison_backup.csv
+*.log
 
 # python
 __pycache__/

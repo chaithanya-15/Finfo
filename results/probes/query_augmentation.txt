@@ -1,0 +1,9 @@
+# P5: Query Metadata Augmentation Comparison
+
+| Query Configuration | Recall@5 | Recall@1 | MRR | Mean Max Overlap | Doc Hit Rate @ 5 |
+|:--------------------|---------:|---------:|----:|-----------------:|-----------------:|
+| Raw Query (No Filter, Baseline Anchor) | 0.4561 | 0.2325 | 0.3227 | 0.5494 | 0.5351 |
+| Augmented Query (No Filter) | 0.4693 | 0.2193 | 0.3136 | 0.5507 | 0.5702 |
+| Augmented Query (With Company Filter) | 0.4956 | 0.2325 | 0.3341 | 0.5653 | 0.6316 |
+
+*Anchor verification*: Appending extracted company and period metadata to the query string without any hard filtering improves Recall@5 from 0.4561 to 0.4693 (+1.32 pp gain). Combining metadata query augmentation with metadata company filtering raises Recall@5 to 0.4956 and Doc Hit Rate@5 to 0.6316.

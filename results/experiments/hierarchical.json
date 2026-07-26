@@ -1,0 +1,7 @@
+{
+  "experiment": "M1_hierarchical_parent_retrieval",
+  "n_chunks": 249033,
+  "child_chunk_r5": 0.13450292397660818,
+  "parent_window_r5": 0.6023391812865496,
+  "parent_window_mrr": 0.4637426900584795
+}
