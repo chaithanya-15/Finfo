@@ -133,6 +133,14 @@ class TestEvaluationMetrics(unittest.TestCase):
         # Reference answers carrying no figure are not scorable this way.
         self.assertIsNone(agree("Yes, margins were stable", "Yes, margins were stable"))
 
+        # A retrieval-only arm generates no answer, and an absent answer must not be scored as
+        # a wrong one. This previously returned 0.0 and reported those arms as answering all 84
+        # numeric questions incorrectly. The refusal above still scores 0.0, which is the
+        # distinction that matters: a refusal has text, a non-run does not.
+        self.assertIsNone(agree("", "$1577.00"))
+        self.assertIsNone(agree("   ", "$1577.00"))
+        self.assertIsNone(agree(float("nan"), "$1577.00"))
+
     def test_refusal_detection(self):
         """Test that refusals count however the model words them."""
         from evaluation.evaluate import is_refusal

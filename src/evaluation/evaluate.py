@@ -371,6 +371,15 @@ class GenerationEvaluator:
             1.0 on agreement, 0.0 on disagreement, or None when the reference answer carries no
             figure and the question is therefore not scorable this way
         """
+        # A retrieval-only arm never produced an answer, and an absent answer is not a wrong
+        # one. Returning 0.0 here reported those arms as scoring 0.0 over all 84 numeric
+        # questions, as though they had answered every one incorrectly. A refusal is the
+        # different case: it carries text, and it still scores 0.0 below, which is the control
+        # that keeps this metric honest.
+        if generated_text is None or not str(generated_text).strip() \
+                or str(generated_text) == "nan":
+            return None
+
         def not_year(v):
             return not (float(v).is_integer() and 1900 <= v <= 2100)
 
