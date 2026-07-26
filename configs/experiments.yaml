@@ -114,6 +114,11 @@ experiments:
     pool: 50
     overrides: {}
 
+  # Auxiliary, NOT one of the fourteen ablation arms and deliberately absent from
+  # results/experiments/comparison.csv. It exists to test whether a larger cross-encoder's
+  # retrieval gain reaches the end task; it does not (Recall@5 0.516 to 0.626, numeric agreement
+  # 16/84 to 17/84, McNemar p = 1.00), so it is reported in the report's section 7.2 rather than
+  # adopted. Run it with --out to a scratch directory so the fourteen-arm table stays intact.
   - name: rerank_large_filtered
     axis: reranking
     note: company-filtered pool of 50 reordered by bge-reranker-large cross-encoder
