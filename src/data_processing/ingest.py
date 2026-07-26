@@ -258,6 +258,70 @@ def chunk_text_fixed_size(text: str, chunk_size: int = 512,
     return chunks
 
 
+def chunk_text_hierarchical(text: str, child_size: int = 128, child_overlap: int = 16,
+                            parent_size: int = 1024, encoding_name: str = "cl100k_base") -> List[Dict[str, Any]]:
+    """
+    Split text into child chunks and compute a parent context window surrounding each child chunk.
+
+    Args:
+        text: Text to chunk
+        child_size: Tokens per child chunk (default 128)
+        child_overlap: Overlap tokens between child chunks (default 16)
+        parent_size: Tokens in parent context window (default 1024)
+        encoding_name: Tokenizer encoding to use
+
+    Returns:
+        List of dictionaries with child text and parent window details
+    """
+    try:
+        encoding = tiktoken.get_encoding(encoding_name)
+    except KeyError:
+        encoding = tiktoken.get_encoding("cl100k_base")
+
+    tokens = encoding.encode(text)
+    n_tokens = len(tokens)
+
+    chunks = []
+    start = 0
+    chunk_index = 0
+    step = max(1, child_size - child_overlap)
+
+    while start < n_tokens:
+        end = min(start + child_size, n_tokens)
+        child_tokens = tokens[start:end]
+        child_text = encoding.decode(child_tokens)
+
+        # Center parent window around child chunk
+        child_center = (start + end) // 2
+        p_start = max(0, child_center - (parent_size // 2))
+        p_end = min(n_tokens, p_start + parent_size)
+        if p_end == n_tokens and n_tokens >= parent_size:
+            p_start = max(0, n_tokens - parent_size)
+
+        parent_tokens = tokens[p_start:p_end]
+        parent_text = encoding.decode(parent_tokens)
+
+        chunks.append({
+            "text": child_text,
+            "chunk_index": chunk_index,
+            "token_count": len(child_tokens),
+            "start_token": start,
+            "end_token": end,
+            "parent_text": parent_text,
+            "parent_start_token": p_start,
+            "parent_end_token": p_end,
+            "parent_token_count": len(parent_tokens)
+        })
+
+        if end >= n_tokens:
+            break
+        start += step
+        chunk_index += 1
+
+    return chunks
+
+
+
 def chunk_by_structure(text: str, elements: list = None,
                        max_chunk_size: int = 512) -> List[Dict[str, Any]]:
     """
