@@ -440,7 +440,7 @@ bare figure. Both metrics are standard, and both would have picked the wrong cha
 ### 7.2 Validating the retrieval metric
 
 Section 7.1 claims Recall@5 ranked our two retrieval changes in the wrong order. That is the
-strongest claim in this report, so we tested it three more times. All three experiments sit
+strongest claim in this report, so we tested it four more times. All four experiments sit
 outside the fourteen-arm ablation and use the same answerable subset and the same index.
 
 The first repeats the reranking comparison with a larger cross-encoder. Swapping
@@ -472,7 +472,27 @@ and still score higher on Recall@5, because a wider window clears the 0.5 overla
 easily regardless of what it contains. Read alone, the Recall@5 column recommends the chunk size
 that finds the right document least often.
 
-These three results mark where the metric can be trusted. Its threshold is sensitive to chunk
+The fourth varies the metric's own threshold. A chunk counts as a hit when it shares at least half
+of a gold span's content words, and one half is an arbitrary cut, so we recomputed the three arms
+across it.
+
+**Table 6. Recall@5 against the overlap threshold, answerable subset.**
+
+| Overlap threshold | Reference | Company filter | Filter + reranking |
+| --- | --- | --- | --- |
+| 0.3 | 0.768 | 0.803 | 0.857 |
+| 0.4 | 0.592 | 0.654 | 0.706 |
+| 0.5 (reported) | 0.456 | 0.509 | 0.516 |
+| 0.6 | 0.386 | 0.425 | 0.439 |
+| 0.7 | 0.310 | 0.332 | 0.364 |
+
+The ordering holds at every threshold, so the ranking in Table 1 does not depend on where the cut
+was placed. The size of the reranker's margin does depend on it, and 0.5 is the least favourable
+setting in the sweep: reranking gains 0.007 over the company filter there, against 0.054 at 0.3
+and 0.032 at 0.7. The figure we report is therefore the most conservative reading of the reranker
+available, which is consistent with the argument in Section 7.1 that this metric under-credits it.
+
+These four results mark where the metric can be trusted. Its threshold is sensitive to chunk
 length independently of retrieval quality, so Recall@5 is usable for comparing arms at a fixed
 chunk size and unsafe across chunk sizes or against a step that only reorders results. That is why
 we report the gold-filing hit rate beside it. This metric is not unusually poor: it is standard,
