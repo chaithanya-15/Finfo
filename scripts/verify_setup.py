@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-#!/usr/bin/env python
 """
 Simple verification script for the FinanceBench RAG project.
 """
 
 import os
 import sys
-import logging
 
 def check_structure():
     """Check that the project structure is correct."""
@@ -14,18 +12,22 @@ def check_structure():
 
     required_dirs = [
         "data",
-        "data/raw_pdfs",
-        "data/processed_chunks",
         "src",
         "src/data_processing",
         "src/retrieval",
         "src/generation",
         "src/evaluation",
-        "src/utils",
         "configs",
         "results",
         "results/figures",
         "report"
+    ]
+
+    # The pipeline writes these and .gitignore keeps them out of the repo, so a fresh
+    # clone is missing them by design. Report them, but do not fail the check.
+    generated_dirs = [
+        ("data/raw_pdfs", "python -m src.data_processing.download_pdfs"),
+        ("data/processed_chunks", "python -m src.data_processing.ingest"),
     ]
 
     missing_dirs = []
@@ -38,9 +40,14 @@ def check_structure():
         for d in missing_dirs:
             print(f"  - {d}")
         return False
-    else:
-        print("✅ All required directories present")
-        return True
+
+    print("✅ All required directories present")
+
+    for dir_path, command in generated_dirs:
+        if not os.path.exists(dir_path):
+            print(f"⚠️  {dir_path} not built yet, create it with: {command}")
+
+    return True
 
 def check_files():
     """Check that key files exist."""
